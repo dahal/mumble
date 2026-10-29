@@ -17,15 +17,29 @@ Audio and text never leave your Mac.
 
 See [prd.md](prd.md) for the product spec.
 
-## Run it
+## Install
+
+Requires a Mac with Apple silicon (M1 or later) and macOS 15 or later.
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/dahal/mumble/main/scripts/install.sh | bash
+```
+
+That downloads the latest release, verifies its SHA-256 checksum and code signature, installs Mumble
+to `/Applications` and opens it. Run the same command to update. Options:
+`MUMBLE_VERSION=0.2.0` for a specific version, `MUMBLE_UNINSTALL=1` to remove it.
+
+Prefer clicking? Download the `.dmg` from [Releases](https://github.com/dahal/mumble/releases) and drag
+Mumble to Applications. If the release isn't notarized, the first open shows "Apple could not verify
+Mumble"; go to System Settings → Privacy & Security and click **Open Anyway** once.
+
+## Build from source
 
 ```sh
 brew install xcodegen          # once
 scripts/build.sh               # → build/Mumble.app
 open build/Mumble.app
 ```
-
-Optionally drag `build/Mumble.app` into `/Applications`.
 
 On first launch Mumble opens its settings window:
 
@@ -74,6 +88,30 @@ never transcript text. Crash reports, if any, are in `~/Library/Logs/DiagnosticR
 - **Model choice**: Phonon-2 (default), Parakeet Ultra (multilingual, most accurate), TDT v3/v2,
   and a light 110M model.
 
+## Releasing
+
+Releases are built by GitHub Actions (`.github/workflows/release.yml`):
+
+```sh
+git tag v0.2.0 && git push origin v0.2.0      # v0.3.0-beta.1 → pre-release
+```
+
+The workflow runs the unit tests, builds with the tag's version, signs, packages
+`Mumble-<version>.dmg`, `Mumble-<version>.zip`, `Mumble.zip` and `SHA256SUMS.txt`, and publishes a
+GitHub release with install instructions. It can also be started from the Actions tab.
+`.github/workflows/ci.yml` runs the tests and a build on every push and pull request.
+
+Signing, via repository secrets:
+
+| Secret | Effect |
+|---|---|
+| *(none)* | Self-signed with a fresh identity per release. Works; users re-grant permissions after each update. |
+| `MUMBLE_SIGNING_P12_BASE64` | Self-signed with a stable identity, so permissions survive updates. Set it with `scripts/export-signing-identity.sh \| gh secret set MUMBLE_SIGNING_P12_BASE64`. |
+| `DEVELOPER_ID_P12_BASE64`, `DEVELOPER_ID_P12_PASSWORD` | Signed with your Apple Developer ID (requires the $99/year Apple Developer Program). |
+| `NOTARY_KEY_ID`, `NOTARY_ISSUER_ID`, `NOTARY_KEY_BASE64` | With Developer ID: notarized and stapled, so a downloaded `.dmg` opens with no warning. Uses an App Store Connect API key (`.p8`, base64). |
+
+Locally, `scripts/build.sh` then `scripts/package.sh` produce the same artifacts in `build/dist/`.
+
 ## Layout
 
 ```
@@ -84,7 +122,11 @@ Packages/MumbleKit/          Swift package
   Tests/                     unit tests + model integration tests
 Mumble/                      the macOS app (menu bar, island, hotkey, recorder, inserter, settings)
 Eval/make-tts-corpus.sh      builds a synthetic eval set with macOS voices
-scripts/build.sh             builds build/Mumble.app
+scripts/build.sh             builds and signs build/Mumble.app (MUMBLE_VERSION, MUMBLE_BUILD)
+scripts/sign.sh              Developer ID or stable self-signed signing, hardened runtime
+scripts/package.sh           dmg + zip + checksums in build/dist (notarizes when configured)
+scripts/install.sh           the curl | bash installer users run
+.github/workflows/           CI and release
 scripts/make-icon.swift      renders the app icon
 project.yml                  XcodeGen project definition
 ```

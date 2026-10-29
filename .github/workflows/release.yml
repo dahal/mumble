@@ -1,0 +1,141 @@
+name: Release
+
+# Publish a release by pushing a version tag:
+#   git tag v0.2.0 && git push origin v0.2.0
+# Tags with a suffix (v0.3.0-beta.1) become pre-releases. You can also run this manually from the
+# Actions tab with a version number.
+#
+# Secrets (all optional):
+#   MUMBLE_SIGNING_P12_BASE64      stable self-signed identity (scripts/export-signing-identity.sh)
+#   DEVELOPER_ID_P12_BASE64        Apple "Developer ID Application" certificate (.p12, base64)
+#   DEVELOPER_ID_P12_PASSWORD      its password
+#   NOTARY_KEY_ID                  App Store Connect API key ID          ┐
+#   NOTARY_ISSUER_ID               App Store Connect issuer ID           ├ for notarization
+#   NOTARY_KEY_BASE64              the .p8 key file, base64              ┘
+# Without the Developer ID secrets the release is self-signed and not notarized; the one-line
+# installer still works without any extra steps for users.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release, e.g. 0.2.0 (creates tag v<version>)"
+        required: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: macos-26
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve version
+        id: version
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            version="${{ inputs.version }}"
+          else
+            version="${GITHUB_REF_NAME}"
+          fi
+          version="${version#v}"
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]] || { echo "Invalid version: $version"; exit 1; }
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=v$version" >> "$GITHUB_OUTPUT"
+          [[ "$version" == *-* ]] && echo "prerelease=true" >> "$GITHUB_OUTPUT" || echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          # CFBundleShortVersionString must be numeric: strip any pre-release suffix.
+          echo "bundle_version=${version%%-*}" >> "$GITHUB_OUTPUT"
+
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Cache Swift packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            Packages/MumbleKit/.build
+            build/DerivedData/SourcePackages
+          key: spm-${{ runner.os }}-${{ hashFiles('Packages/MumbleKit/Package.resolved') }}
+          restore-keys: spm-${{ runner.os }}-
+
+      - name: Unit tests
+        working-directory: Packages/MumbleKit
+        run: swift test --filter MumbleCoreTests
+
+      - name: Import Developer ID certificate
+        env:
+          P12: ${{ secrets.DEVELOPER_ID_P12_BASE64 }}
+          P12_PASSWORD: ${{ secrets.DEVELOPER_ID_P12_PASSWORD }}
+        run: |
+          if [[ -z "$P12" ]]; then
+            echo "No Developer ID secret: the release will be self-signed."
+            exit 0
+          fi
+          keychain="$RUNNER_TEMP/developer-id.keychain-db"
+          password=$(uuidgen)
+          echo "$P12" | base64 --decode > "$RUNNER_TEMP/developer-id.p12"
+          security create-keychain -p "$password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$password" "$keychain"
+          security import "$RUNNER_TEMP/developer-id.p12" -k "$keychain" -P "$P12_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$password" "$keychain" >/dev/null
+          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+          identity=$(security find-identity -v -p codesigning "$keychain" | awk -F'"' '/Developer ID Application/ {print $2; exit}')
+          [[ -n "$identity" ]] || { echo "No Developer ID Application identity in the certificate"; exit 1; }
+          echo "DEVELOPER_ID_IDENTITY=$identity" >> "$GITHUB_ENV"
+          rm "$RUNNER_TEMP/developer-id.p12"
+
+      - name: Build and sign
+        env:
+          MUMBLE_VERSION: ${{ steps.version.outputs.bundle_version }}
+          MUMBLE_BUILD: ${{ github.run_number }}
+          MUMBLE_SIGNING_P12_BASE64: ${{ secrets.MUMBLE_SIGNING_P12_BASE64 }}
+        run: scripts/build.sh
+
+      - name: Package (and notarize when configured)
+        env:
+          NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
+          NOTARY_ISSUER_ID: ${{ secrets.NOTARY_ISSUER_ID }}
+          NOTARY_KEY_BASE64: ${{ secrets.NOTARY_KEY_BASE64 }}
+        run: |
+          if [[ -n "$NOTARY_KEY_BASE64" && -n "${DEVELOPER_ID_IDENTITY:-}" ]]; then
+            export NOTARY_KEY_PATH="$RUNNER_TEMP/notary.p8"
+            echo "$NOTARY_KEY_BASE64" | base64 --decode > "$NOTARY_KEY_PATH"
+          else
+            unset NOTARY_KEY_ID NOTARY_ISSUER_ID
+          fi
+          scripts/package.sh
+          # Release assets carry the full version (including any pre-release suffix).
+          bundle="${{ steps.version.outputs.bundle_version }}"
+          full="${{ steps.version.outputs.version }}"
+          if [[ "$bundle" != "$full" ]]; then
+            cd build/dist
+            mv "Mumble-$bundle.dmg" "Mumble-$full.dmg"
+            mv "Mumble-$bundle.zip" "Mumble-$full.zip"
+            shasum -a 256 "Mumble-$full.dmg" "Mumble-$full.zip" Mumble.zip > SHA256SUMS.txt
+          fi
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          source build/package-info
+          scripts/release-notes.sh "${{ steps.version.outputs.version }}" "$notarized" "${{ github.repository }}" > "$RUNNER_TEMP/notes.md"
+          flags=()
+          [[ "${{ steps.version.outputs.prerelease }}" == "true" ]] && flags+=(--prerelease)
+          gh release create "${{ steps.version.outputs.tag }}" build/dist/* \
+            --title "Mumble ${{ steps.version.outputs.version }}" \
+            --notes-file "$RUNNER_TEMP/notes.md" --generate-notes \
+            --target "${{ github.sha }}" "${flags[@]}"
