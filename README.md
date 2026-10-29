@@ -11,7 +11,7 @@
 
 ---
 
- Speech recognition runs on the Apple Neural Engine via
+Speech recognition runs on the Apple Neural Engine via
 [FluidAudio](https://github.com/FluidInference/FluidAudio) (NVIDIA Parakeet-family models).
 Audio and text never leave your Mac.
 
