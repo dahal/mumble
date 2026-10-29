@@ -99,7 +99,7 @@ import Testing
 
         let partial = try JSONDecoder().decode(MumbleSettings.self, from: Data(#"{"model":"v2"}"#.utf8))
         #expect(partial.model == .v2)
-        #expect(partial.triggerKey == .function)
+        #expect(partial.triggerKey == .rightOption)
     }
 
     @Test func historyPersistsNewestFirstWithLimit() throws {

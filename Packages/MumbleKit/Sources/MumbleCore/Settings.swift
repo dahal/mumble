@@ -83,7 +83,7 @@ public struct VocabularyEntry: Codable, Sendable, Hashable, Identifiable {
 }
 
 public struct MumbleSettings: Codable, Sendable, Equatable {
-    public var triggerKey: TriggerKey = .function
+    public var triggerKey: TriggerKey = .rightOption
     public var model: SpeechModel = .phonon2
     public var removeFillers = true
     public var spokenCommands = true

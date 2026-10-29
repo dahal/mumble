@@ -1,4 +1,3 @@
-@preconcurrency import AVFoundation
 import Foundation
 import MumbleASR
 import MumbleCore
@@ -21,27 +20,6 @@ let model = args.firstIndex(of: "--model").flatMap { args.index(after: $0) < arg
 let raw = args.contains("--raw")
 let itn = args.contains("--itn")
 
-func loadSamples(_ url: URL) throws -> [Float] {
-    let file = try AVAudioFile(forReading: url)
-    let target = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 16_000, channels: 1, interleaved: false)!
-    guard let input = AVAudioPCMBuffer(pcmFormat: file.processingFormat, frameCapacity: AVAudioFrameCount(file.length))
-    else { return [] }
-    try file.read(into: input)
-    let converter = AVAudioConverter(from: file.processingFormat, to: target)!
-    let capacity = AVAudioFrameCount(Double(input.frameLength) * 16_000 / file.processingFormat.sampleRate) + 1024
-    let output = AVAudioPCMBuffer(pcmFormat: target, frameCapacity: capacity)!
-    nonisolated(unsafe) var supplied = false
-    var error: NSError?
-    converter.convert(to: output, error: &error) { _, status in
-        if supplied { status.pointee = .endOfStream; return nil }
-        supplied = true
-        status.pointee = .haveData
-        return input
-    }
-    if let error { throw error }
-    return Array(UnsafeBufferPointer(start: output.floatChannelData![0], count: Int(output.frameLength)))
-}
-
 let engine = TranscriptionEngine()
 print("Loading \(model.displayName)…")
 try await engine.load(model)
@@ -52,7 +30,7 @@ let files = try FileManager.default.contentsOfDirectory(at: URL(fileURLWithPath:
 
 var totalErrors = 0, totalWords = 0, totalAudio = 0.0, totalMs = 0
 for file in files {
-    let samples = try loadSamples(file)
+    let samples = try AudioFileLoader.samples(from: file)
     let transcript = try await engine.transcribe(samples, boostVocabulary: false)
     let normalizer: ((String) -> String)? = itn ? { TranscriptionEngine.normalize($0) } : nil
     let text = raw ? transcript.text : TextPipeline.process(

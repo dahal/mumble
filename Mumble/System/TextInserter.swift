@@ -1,0 +1,100 @@
+import AppKit
+import ApplicationServices
+import Carbon.HIToolbox
+
+/// Puts text into whatever app has focus by pasting it, then restores the user's clipboard.
+@MainActor
+enum TextInserter {
+    enum Outcome: Equatable {
+        case inserted
+        /// A password field is focused; the text was only copied.
+        case copiedSecureField
+    }
+
+    static func insert(_ text: String) async -> Outcome {
+        let pasteboard = NSPasteboard.general
+
+        if IsSecureEventInputEnabled() {
+            pasteboard.clearContents()
+            pasteboard.setString(text, forType: .string)
+            return .copiedSecureField
+        }
+
+        let saved = snapshot(pasteboard)
+        pasteboard.clearContents()
+        pasteboard.setString(text, forType: .string)
+        // Tells clipboard managers to ignore this short-lived entry (nspasteboard.org convention).
+        pasteboard.setData(Data(), forType: NSPasteboard.PasteboardType("org.nspasteboard.TransientType"))
+        let ourChange = pasteboard.changeCount
+
+        postCommandV()
+
+        // Give the target app time to read the pasteboard before restoring it.
+        try? await Task.sleep(for: .milliseconds(350))
+        if pasteboard.changeCount == ourChange {
+            restore(saved, to: pasteboard)
+        }
+        return .inserted
+    }
+
+    static func copy(_ text: String) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+    }
+
+    private static func postCommandV() {
+        let source = CGEventSource(stateID: .combinedSessionState)
+        let vKey = CGKeyCode(kVK_ANSI_V)
+        let down = CGEvent(keyboardEventSource: source, virtualKey: vKey, keyDown: true)
+        let up = CGEvent(keyboardEventSource: source, virtualKey: vKey, keyDown: false)
+        down?.flags = .maskCommand
+        up?.flags = .maskCommand
+        down?.post(tap: .cgAnnotatedSessionEventTap)
+        up?.post(tap: .cgAnnotatedSessionEventTap)
+    }
+
+    private static func snapshot(_ pasteboard: NSPasteboard) -> [[NSPasteboard.PasteboardType: Data]] {
+        (pasteboard.pasteboardItems ?? []).map { item in
+            Dictionary(uniqueKeysWithValues: item.types.compactMap { type in item.data(forType: type).map { (type, $0) } })
+        }
+    }
+
+    private static func restore(_ items: [[NSPasteboard.PasteboardType: Data]], to pasteboard: NSPasteboard) {
+        pasteboard.clearContents()
+        guard !items.isEmpty else { return }
+        let restored = items.map { entries in
+            let item = NSPasteboardItem()
+            for (type, data) in entries { item.setData(data, forType: type) }
+            return item
+        }
+        pasteboard.writeObjects(restored)
+    }
+
+    /// The few characters before the cursor in the focused text field, via Accessibility.
+    /// Returns nil when the app doesn't expose it (many Electron and web apps don't).
+    static func precedingText(maxLength: Int = 4) -> String? {
+        let system = AXUIElementCreateSystemWide()
+        var focused: AnyObject?
+        guard AXUIElementCopyAttributeValue(system, kAXFocusedUIElementAttribute as CFString, &focused) == .success,
+              let focused, CFGetTypeID(focused) == AXUIElementGetTypeID()
+        else { return nil }
+        let element = focused as! AXUIElement
+
+        var rangeValue: AnyObject?
+        guard AXUIElementCopyAttributeValue(element, kAXSelectedTextRangeAttribute as CFString, &rangeValue) == .success,
+              let rangeValue, CFGetTypeID(rangeValue) == AXValueGetTypeID()
+        else { return nil }
+        var selection = CFRange()
+        guard AXValueGetValue(rangeValue as! AXValue, .cfRange, &selection) else { return nil }
+        guard selection.location > 0 else { return "" }
+
+        var before = CFRange(location: max(0, selection.location - maxLength), length: 0)
+        before.length = selection.location - before.location
+        guard let beforeValue = AXValueCreate(.cfRange, &before) else { return nil }
+        var text: AnyObject?
+        guard AXUIElementCopyParameterizedAttributeValue(
+            element, kAXStringForRangeParameterizedAttribute as CFString, beforeValue, &text) == .success
+        else { return nil }
+        return text as? String
+    }
+}

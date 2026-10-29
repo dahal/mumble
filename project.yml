@@ -1,0 +1,46 @@
+# Generate the Xcode project with: xcodegen generate
+name: Mumble
+options:
+  bundleIdPrefix: dev.mumble
+  deploymentTarget:
+    macOS: "15.0"
+  createIntermediateGroups: true
+
+packages:
+  MumbleKit:
+    path: Packages/MumbleKit
+
+targets:
+  Mumble:
+    type: application
+    platform: macOS
+    sources:
+      - path: Mumble
+    dependencies:
+      - package: MumbleKit
+        product: MumbleCore
+      - package: MumbleKit
+        product: MumbleASR
+    info:
+      path: Mumble/Info.plist
+      properties:
+        CFBundleDisplayName: Mumble
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        LSUIElement: true
+        LSApplicationCategoryType: public.app-category.productivity
+        NSMicrophoneUsageDescription: Mumble listens only while you hold the dictation key, and transcribes on this Mac.
+        NSHumanReadableCopyright: Runs fully on-device.
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.mumble.Mumble
+        PRODUCT_NAME: Mumble
+        MARKETING_VERSION: 0.1.0
+        CURRENT_PROJECT_VERSION: 1
+        SWIFT_VERSION: 6.0
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGN_IDENTITY: "-"
+        ENABLE_HARDENED_RUNTIME: NO
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        COMBINE_HIDPI_IMAGES: YES
+        DEAD_CODE_STRIPPING: YES
