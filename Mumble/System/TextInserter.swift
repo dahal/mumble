@@ -11,10 +11,20 @@ enum TextInserter {
         case copiedSecureField
         /// Without Accessibility, synthetic ⌘V is silently dropped; the text was only copied.
         case copiedNoAccessibility
+        /// The end-to-end test's window wasn't frontmost; nothing was pasted anywhere.
+        case blockedOutsideTest
     }
 
-    static func insert(_ text: String) async -> Outcome {
+    /// Set by the end-to-end test: pastes are only allowed into this process.
+    static var restrictToProcess: pid_t?
+
+    /// - Parameter onPasted: called the moment ⌘V is posted (before the clipboard is restored).
+    static func insert(_ text: String, onPasted: () -> Void = {}) async -> Outcome {
         let pasteboard = NSPasteboard.general
+
+        if let pid = restrictToProcess, NSWorkspace.shared.frontmostApplication?.processIdentifier != pid {
+            return .blockedOutsideTest
+        }
 
         if IsSecureEventInputEnabled() {
             copy(text)
@@ -33,6 +43,7 @@ enum TextInserter {
         let ourChange = pasteboard.changeCount
 
         postCommandV()
+        onPasted()
 
         // Give the target app time to read the pasteboard before restoring it.
         try? await Task.sleep(for: .milliseconds(350))

@@ -63,6 +63,22 @@ struct TranscriptionEngineTests {
         try await Self.engine.setVocabulary([])
     }
 
+    @Test func longDictationHasNoSeamArtifacts() async throws {
+        try await Self.engine.load(.phonon2)
+        let reference = "Here is the plan for next week. On Monday we finish the onboarding flow and fix the login bug. "
+            + "On Tuesday the design team reviews the new settings screen with the product managers. "
+            + "On Wednesday we run the load tests and write up the results for the leadership meeting. "
+            + "On Thursday we ship the release candidate to the beta testers and collect their feedback. "
+            + "On Friday we decide whether it is ready to launch."
+        let audio = try Self.speech(reference)
+        #expect(audio.count > 16_000 * 16, "needs to exceed the model window")
+        let transcript = try await Self.engine.transcribe(audio, boostVocabulary: false)
+        let wer = WordErrorRate.compute(reference: reference, hypothesis: transcript.text)
+        #expect(wer.rate <= 0.03, "WER \(wer.rate): \(transcript.text)")
+        #expect(wer.insertions == 0, "inserted words (seam duplication?): \(transcript.text)")
+        #expect(transcript.text.hasSuffix("."))
+    }
+
     @Test func normalizesNumbers() {
         #expect(TranscriptionEngine.normalize("it costs twenty five dollars").contains("$25"))
     }

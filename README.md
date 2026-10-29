@@ -37,9 +37,17 @@ Then, in any app:
 The trigger key can be changed to fn, Right ⌘ or Right ⌃ in settings. If you choose fn, set
 System Settings → Keyboard → "Press 🌐 key to" → "Do Nothing" so it doesn't also open the emoji picker.
 
-> **Note on rebuilding:** the app is ad-hoc signed (no Developer ID on this machine). macOS ties the
-> Accessibility permission to the exact binary, so after each rebuild remove Mumble from the
-> Accessibility list and add it again. A Developer ID signature would fix this.
+> **Signing:** `scripts/build.sh` signs with a local self-signed identity it creates in `.signing/`
+> (its own keychain file, never added to your login keychain). The signature is stable, so Microphone
+> and Accessibility permissions survive rebuilds.
+
+**Microphone:** *Automatic* (the default) records from your system microphone, but if that's a
+Bluetooth headset it uses the built-in mic instead: opening a Bluetooth mic switches the headphones
+to the hands-free call profile (16 kHz, audibly worse music) and costs accuracy. You can still choose
+the headset mic explicitly in settings.
+
+**Logs:** `~/Library/Logs/Mumble/Mumble.log` (menu bar → Show Log). Timings and device names only,
+never transcript text. Crash reports, if any, are in `~/Library/Logs/DiagnosticReports/Mumble-*.ips`.
 
 ## Features
 
@@ -96,10 +104,28 @@ build/Mumble.app/Contents/MacOS/Mumble --demo-island            # animate the is
 build/Mumble.app/Contents/MacOS/Mumble --render-island /tmp/x   # island states → PNGs
 ```
 
+Acoustic end-to-end test against a real app (quit other Mumble instances first; uses the MacBook
+speakers even when headphones are connected; don't type while it runs):
+
+```sh
+open -n -W build/Mumble.app --args --e2e /tmp/e2e.txt --file "$PWD/test.md" [--mic "Nothing"]
+cat /tmp/e2e.txt
+```
+
+It opens the file in VS Code, presses Right ⌥ with real key events, speaks with `say`, saves and
+reads the file back. Before every synthetic key press it verifies VS Code with that file is
+frontmost, and it only allows pastes into VS Code, so it can never type into another app.
+Scenarios: hold ×3 back to back, double-tap latch, Esc cancel, ~30 s dictation, cold mic start.
+It also records the output device's sample rate to prove Bluetooth audio isn't degraded.
+
 ## Measured (M2 Max, Phonon-2)
 
 | | Result |
 |---|---|
+| End-to-end in VS Code (speakers → mic → paste), 7 scenarios | 7/7 pass, 0% WER on sentences |
+| Key release → text pasted | 50–90 ms for a sentence; ~260 ms for 23 s of speech |
+| Bluetooth headphones as output while dictating | stays at 44.1 kHz (no call-profile switch) |
+| Idle | 0% CPU, ~170 MB with the model loaded |
 | Synthetic dictation set (10 sentences) | 0% WER, ~30 ms per sentence, ~90× real-time |
 | Jargon set (names, dev tools) without vocabulary | 23.8% WER |
 | Same, with vocabulary | 9.5% WER, and still 0% on the plain set (no false swaps) |

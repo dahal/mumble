@@ -6,8 +6,10 @@ import MumbleCore
 @MainActor
 final class HotkeyMonitor {
     var trigger: TriggerKey = .rightOption
-    var onPress: () -> Void = {}
-    var onRelease: () -> Void = {}
+    /// Called with the event's own timestamp (seconds since boot), so a busy main thread
+    /// can't make a quick tap look like a long press.
+    var onPress: (TimeInterval) -> Void = { _ in }
+    var onRelease: (TimeInterval) -> Void = { _ in }
     var onEscape: () -> Void = {}
     /// Another key was typed while the trigger was held (e.g. ⌥+letter for a special character).
     var onOtherKey: () -> Void = {}
@@ -51,7 +53,7 @@ final class HotkeyMonitor {
             let down = isPressed(event.modifierFlags)
             guard down != isDown else { return }
             isDown = down
-            down ? onPress() : onRelease()
+            down ? onPress(event.timestamp) : onRelease(event.timestamp)
         default:
             break
         }

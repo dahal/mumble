@@ -52,7 +52,7 @@ enum AudioDevices {
         return system
     }
 
-    private static func device(for id: AudioDeviceID) -> Device? {
+    static func device(for id: AudioDeviceID) -> Device? {
         guard let uid = stringProperty(id, kAudioDevicePropertyDeviceUID),
               let name = stringProperty(id, kAudioObjectPropertyName)
         else { return nil }
@@ -88,5 +88,30 @@ enum AudioDevices {
         var size = UInt32(MemoryLayout<Unmanaged<CFString>?>.size)
         guard AudioObjectGetPropertyData(id, &address, 0, nil, &size, &value) == noErr, let value else { return nil }
         return value.takeRetainedValue() as String
+    }
+}
+
+extension AudioDevices {
+    static func defaultOutput() -> Device? {
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioHardwarePropertyDefaultOutputDevice, mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain)
+        var id = AudioDeviceID(0)
+        var size = UInt32(MemoryLayout<AudioDeviceID>.size)
+        guard AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject), &address, 0, nil, &size, &id) == noErr
+        else { return nil }
+        return device(for: id)
+    }
+
+    /// A Bluetooth headset drops from ~44.1/48 kHz (A2DP, music quality) to 16/24 kHz (hands-free
+    /// call profile) when its microphone is opened. Watching this shows whether dictation degraded it.
+    static func nominalSampleRate(_ id: AudioDeviceID) -> Double {
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyNominalSampleRate, mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain)
+        var rate: Float64 = 0
+        var size = UInt32(MemoryLayout<Float64>.size)
+        _ = AudioObjectGetPropertyData(id, &address, 0, nil, &size, &rate)
+        return rate
     }
 }

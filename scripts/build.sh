@@ -10,12 +10,17 @@ cd "$(dirname "$0")/.."
 export DEVELOPER_DIR="${DEVELOPER_DIR:-/Applications/Xcode.app/Contents/Developer}"
 
 xcodegen generate --quiet
-xcodebuild -project Mumble.xcodeproj -scheme Mumble -configuration Release \
-  -derivedDataPath build/DerivedData -skipPackagePluginValidation build \
-  | grep -E "error:|warning: .*/Mumble/|\*\* BUILD" || true
+log=build/xcodebuild.log
+mkdir -p build
+if ! xcodebuild -project Mumble.xcodeproj -scheme Mumble -configuration Release \
+  -derivedDataPath build/DerivedData -skipPackagePluginValidation build > "$log" 2>&1; then
+  grep -E "error:" "$log" | sort -u
+  echo "Build FAILED (full log: $log)"
+  exit 1
+fi
+grep -E "warning: .*/Mumble/" "$log" | sort -u || true
 
 app=build/DerivedData/Build/Products/Release/Mumble.app
-[[ -d "$app" ]] || { echo "Build failed"; exit 1; }
 rm -rf build/Mumble.app
 ditto "$app" build/Mumble.app
 

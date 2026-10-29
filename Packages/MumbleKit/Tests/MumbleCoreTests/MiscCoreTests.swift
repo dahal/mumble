@@ -51,12 +51,59 @@ import Testing
             + [Float](repeating: 0, count: 32_000)
         let trimmed = AudioAnalysis.trimSilence(audio)
         let seconds = Double(trimmed.count) / 16_000
-        #expect(seconds > 1.4 && seconds < 1.6)
+        #expect(seconds > 1.5 && seconds < 1.7)  // 1 s of speech + 0.3 s padding each side
+    }
+
+    @Test func trimKeepsQuietSpeechFromQuietMicrophones() {
+        // A Bluetooth headset mic: speech around 0.002–0.004 RMS over a 0.0003 noise floor,
+        // with a softer final word. All of it must survive trimming.
+        let noise = (0..<8_000).map { _ in Float.random(in: -0.0004...0.0004) }
+        let loud = sine(seconds: 1.5, amplitude: 0.005)
+        let soft = sine(seconds: 1.0, amplitude: 0.0025)
+        let audio = noise + loud + noise + soft + noise
+        let trimmed = AudioAnalysis.trimSilence(audio)
+        let seconds = Double(trimmed.count) / 16_000
+        #expect(seconds > 3.3, "trimmed to \(seconds) s")
+        #expect(seconds < 3.9, "barely trimmed: \(seconds) s")
     }
 
     @Test func trimLeavesAllQuietAudioUntouched() {
         let quiet = [Float](repeating: 0, count: 8_000)
         #expect(AudioAnalysis.trimSilence(quiet).count == quiet.count)
+    }
+
+    @Test func shortAudioIsOneSegment() {
+        let audio = sine(seconds: 10, amplitude: 0.2)
+        #expect(AudioAnalysis.splitAtPauses(audio) == [0..<audio.count])
+    }
+
+    @Test func longAudioIsCutInPauses() {
+        // 3 "sentences" of 9 s speech, each followed by a 0.6 s pause: 28.8 s total.
+        let pause = [Float](repeating: 0, count: 9_600)
+        var audio: [Float] = []
+        var pauseCenters: [Int] = []
+        for _ in 0..<3 {
+            audio += sine(seconds: 9, amplitude: 0.2)
+            pauseCenters.append(audio.count + pause.count / 2)
+            audio += pause
+        }
+        let segments = AudioAnalysis.splitAtPauses(audio)
+        #expect(segments.count == 3)
+        #expect(segments.first?.lowerBound == 0)
+        #expect(segments.last?.upperBound == audio.count)
+        for (a, b) in zip(segments, segments.dropFirst()) {
+            #expect(a.upperBound == b.lowerBound)  // contiguous, nothing lost or duplicated
+            // The cut lies inside a pause.
+            #expect(pauseCenters.contains { abs($0 - a.upperBound) < 4_800 }, "cut at \(a.upperBound)")
+        }
+        #expect(segments.allSatisfy { $0.count <= Int(13.5 * 16_000) })
+    }
+
+    @Test func continuousAudioIsStillCappedInLength() {
+        let audio = sine(seconds: 40, amplitude: 0.2)
+        let segments = AudioAnalysis.splitAtPauses(audio)
+        #expect(segments.allSatisfy { $0.count <= Int(13.5 * 16_000) })
+        #expect(segments.map(\.count).reduce(0, +) == audio.count)
     }
 
     @Test func meterLevelRange() {

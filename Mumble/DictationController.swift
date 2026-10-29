@@ -1,4 +1,5 @@
 import AppKit
+import AudioToolbox
 import MumbleASR
 import MumbleCore
 import Observation
@@ -31,6 +32,7 @@ final class DictationController {
     @ObservationIgnored private let historyStore = HistoryStore(fileURL: HistoryStore.defaultURL)
 
     @ObservationIgnored private var session: UUID?
+    @ObservationIgnored private var testInputOverride = false
     @ObservationIgnored private var recordingStartedAt: ContinuousClock.Instant?
     @ObservationIgnored private var previewTask: Task<Void, Never>?
     @ObservationIgnored private var meterTask: Task<Void, Never>?
@@ -40,7 +42,7 @@ final class DictationController {
 
     static let settingsKey = "settings.v1"
     /// Preview re-transcribes at most this much trailing audio, keeping each tick cheap on long dictations.
-    static let previewWindowSeconds = 20.0
+    static let previewWindowSeconds = 12.0
     static let previewInterval: Duration = .milliseconds(450)
 
     var isRecording: Bool { session != nil }
@@ -63,10 +65,10 @@ final class DictationController {
         if AudioRecorder.permission == .notDetermined {
             Task { AppLog.info("Microphone permission granted: \(await AudioRecorder.requestPermission())") }
         }
-        recorder.preferredInputUID = settings.inputDeviceUID
+        if !testInputOverride { recorder.preferredInputUID = settings.inputDeviceUID }
         hotkey.trigger = settings.triggerKey
-        hotkey.onPress = { [weak self] in self?.apply(self?.gesture.press(at: Self.now) ?? .none) }
-        hotkey.onRelease = { [weak self] in self?.apply(self?.gesture.release(at: Self.now) ?? .none) }
+        hotkey.onPress = { [weak self] time in self?.apply(self?.gesture.press(at: time) ?? .none) }
+        hotkey.onRelease = { [weak self] time in self?.apply(self?.gesture.release(at: time) ?? .none) }
         hotkey.onEscape = { [weak self] in self?.apply(self?.gesture.cancel() ?? .none) }
         hotkey.onOtherKey = { [weak self] in
             // ⌥+key typed a special character, or ⌘+key ran a shortcut: not a dictation.
@@ -77,6 +79,7 @@ final class DictationController {
         watchAccessibilityTrust()
         loadModel()
         applyVocabulary()
+        Sounds.preload()
     }
 
     func update(_ change: (inout MumbleSettings) -> Void) {
@@ -163,7 +166,13 @@ final class DictationController {
         }
     }
 
+    static func ms(_ d: Duration) -> Int {
+        Int(d.components.seconds * 1000 + d.components.attoseconds / 1_000_000_000_000_000)
+    }
+
     private func beginRecording() {
+        let began = ContinuousClock.now
+        defer { if session != nil { AppLog.info("Recording start took \(Self.ms(began.duration(to: .now))) ms") } }
         guard modelStatus.isReady else {
             gesture.reset()
             switch modelStatus {
@@ -246,23 +255,29 @@ final class DictationController {
         }
 
         island.phase = .finishing
+        let soundStart = ContinuousClock.now
         if settings.playSounds { Sounds.stop() }
+        let soundMs = Self.ms(soundStart.duration(to: .now))
 
         do {
+            let preMs = Self.ms(released.duration(to: .now))
+            let asrStart = ContinuousClock.now
             let (text, transcript) = try await transcribeForInsertion(samples)
-            AppLog.info("Transcribed \(transcript.audioSeconds) s in \(transcript.processingMs) ms → \(text.count) chars")
+            let asrWallMs = Self.ms(asrStart.duration(to: .now))
+            AppLog.info("Transcribed \(transcript.audioSeconds) s → \(text.count) chars; pre \(preMs) ms, engine \(transcript.processingMs) ms, engine call incl. queue \(asrWallMs) ms, sound \(soundMs) ms")
             guard !text.isEmpty else {
                 notify("Didn't catch any words.")
                 return
             }
 
+            let axStart = ContinuousClock.now
             let preceding = settings.smartSpacing ? TextInserter.precedingText() : nil
+            let axMs = Self.ms(axStart.duration(to: .now))
             let output = InsertionFormatter.format(text, preceding: preceding)
-            let outcome = await TextInserter.insert(output)
-            let elapsed = released.duration(to: .now)
-            let latency = Int(elapsed.components.seconds * 1000 + elapsed.components.attoseconds / 1_000_000_000_000_000)
+            var latency = 0
+            let outcome = await TextInserter.insert(output) { latency = Self.ms(released.duration(to: .now)) }
             lastLatencyMs = latency
-            AppLog.info("Insert outcome \(outcome); \(latency) ms release→paste")
+            AppLog.info("Insert outcome \(outcome); \(latency) ms release→paste (ASR \(transcript.processingMs) ms, cursor lookup \(axMs) ms)")
 
             record(HistoryItem(
                 text: text, rawText: transcript.text, audioSeconds: transcript.audioSeconds, latencyMs: latency,
@@ -274,6 +289,9 @@ final class DictationController {
                 islandPanel.hide(after: .milliseconds(900))
             case .copiedSecureField:
                 island.phase = .notice("Secure field — copied to clipboard instead")
+                islandPanel.hide(after: .seconds(2))
+            case .blockedOutsideTest:
+                island.phase = .notice("Test window wasn't in front; nothing pasted")
                 islandPanel.hide(after: .seconds(2))
             case .copiedNoAccessibility:
                 island.phase = .notice("Copied. Grant Accessibility in Settings to paste automatically.")
@@ -294,6 +312,16 @@ final class DictationController {
             settings.inverseTextNormalization ? { TranscriptionEngine.normalize($0) } : nil
         let text = TextPipeline.process(transcript.text, options: settings.pipelineOptions, normalizer: normalizer)
         return (text, transcript)
+    }
+
+    /// Dev/test only: records from this device without saving it to settings.
+    func setTestInputDevice(_ uid: String?) {
+        testInputOverride = true
+        recorder.preferredInputUID = uid
+    }
+
+    var testInputDeviceName: String {
+        AudioDevices.resolveInput(preferredUID: recorder.preferredInputUID)?.name ?? "default"
     }
 
     /// Waits until the model has loaded (or failed). Used by the developer self-test.
@@ -367,17 +395,23 @@ final class DictationController {
         Task { _ = await TextInserter.insert(last.text) }
     }
 
-    private static var now: TimeInterval { ProcessInfo.processInfo.systemUptime }
 }
 
+/// Start/stop cues via System Sound Services, which plays asynchronously. `NSSound.play()`
+/// blocked the main thread for 150–200 ms (waking a Bluetooth output route) right when the
+/// user released the key, which was most of Mumble's release-to-text latency.
 @MainActor
 enum Sounds {
-    static func start() { play("Tink", volume: 0.25) }
-    static func stop() { play("Pop", volume: 0.2) }
+    private static let startID = load("Tink")
+    private static let stopID = load("Pop")
 
-    private static func play(_ name: String, volume: Float) {
-        guard let sound = NSSound(named: name)?.copy() as? NSSound else { return }
-        sound.volume = volume
-        sound.play()
+    static func preload() { _ = (startID, stopID) }
+    static func start() { startID.map(AudioServicesPlaySystemSound) }
+    static func stop() { stopID.map(AudioServicesPlaySystemSound) }
+
+    private static func load(_ name: String) -> SystemSoundID? {
+        var id: SystemSoundID = 0
+        let url = URL(fileURLWithPath: "/System/Library/Sounds/\(name).aiff") as CFURL
+        return AudioServicesCreateSystemSoundID(url, &id) == noErr ? id : nil
     }
 }

@@ -34,25 +34,73 @@ public enum AudioAnalysis {
             .max() ?? 0
     }
 
-    /// Removes leading/trailing stretches quieter than `threshold`, keeping `padding` seconds
-    /// of context on each side so word onsets and tails are not clipped.
+    /// Removes leading/trailing silence, keeping `paddingSeconds` of context on each side so word
+    /// onsets and tails are not clipped.
+    ///
+    /// The threshold adapts to each recording: a fixed level trimmed real speech away on quiet
+    /// microphones (a Bluetooth headset mic peaks around 0.002–0.005 RMS). Speech is anything
+    /// clearly above the recording's own noise floor.
     public static func trimSilence(
         _ samples: [Float],
-        threshold: Float = 0.006,
         frameSeconds: Double = 0.02,
-        paddingSeconds: Double = 0.25
+        paddingSeconds: Double = 0.3
     ) -> [Float] {
         let frame = max(1, Int(frameSeconds * Double(sampleRate)))
         let frames = stride(from: 0, to: samples.count, by: frame).map {
             rms(samples[$0..<min($0 + frame, samples.count)])
         }
-        guard let firstLoud = frames.firstIndex(where: { $0 >= threshold }),
+        guard frames.count > 4 else { return samples }
+        let sorted = frames.sorted()
+        let noiseFloor = sorted[sorted.count / 10]
+        let loudest = sorted[sorted.count - 1]
+        // 3× the noise floor, but never above 15% of the loudest frame (so quiet speech in a
+        // loud recording still counts) and never below an absolute floor of digital near-silence.
+        let threshold = max(min(noiseFloor * 3, loudest * 0.15), 0.0003)
+        guard loudest > threshold,
+              let firstLoud = frames.firstIndex(where: { $0 >= threshold }),
               let lastLoud = frames.lastIndex(where: { $0 >= threshold })
         else { return samples }
         let pad = Int(paddingSeconds * Double(sampleRate))
         let start = max(0, firstLoud * frame - pad)
         let end = min(samples.count, (lastLoud + 1) * frame + pad)
         return Array(samples[start..<end])
+    }
+
+    /// Splits a long recording into segments no longer than `maxSeconds`, cutting at the quietest
+    /// moment in the last part of each window, so no word straddles a cut.
+    ///
+    /// Parakeet's window is ~15 s; longer audio is chunked inside FluidAudio with overlapping windows,
+    /// and its seam merging can duplicate a word cut in half ("meeting" → "meetingeting").
+    /// Cutting in pauses avoids seams inside words entirely.
+    public static func splitAtPauses(
+        _ samples: [Float], maxSeconds: Double = 13.5, searchFromSeconds: Double = 7, frameSeconds: Double = 0.02
+    ) -> [Range<Int>] {
+        let maxLength = Int(maxSeconds * Double(sampleRate))
+        guard samples.count > maxLength else { return [0..<samples.count] }
+        let frame = max(1, Int(frameSeconds * Double(sampleRate)))
+        let searchFrom = Int(searchFromSeconds * Double(sampleRate))
+
+        var segments: [Range<Int>] = []
+        var start = 0
+        while samples.count - start > maxLength {
+            // Quietest 200 ms stretch between searchFrom and maxLength into this segment.
+            let windowFrames = 10
+            var bestCut = start + maxLength
+            var bestEnergy = Float.greatestFiniteMagnitude
+            var position = start + searchFrom
+            while position + windowFrames * frame <= start + maxLength {
+                let energy = rms(samples[position..<(position + windowFrames * frame)])
+                if energy < bestEnergy {
+                    bestEnergy = energy
+                    bestCut = position + windowFrames * frame / 2
+                }
+                position += frame
+            }
+            segments.append(start..<bestCut)
+            start = bestCut
+        }
+        segments.append(start..<samples.count)
+        return segments
     }
 
     /// Maps RMS to a 0...1 meter value on a perceptual (dB) scale: -60 dBFS → 0, 0 dBFS → 1.

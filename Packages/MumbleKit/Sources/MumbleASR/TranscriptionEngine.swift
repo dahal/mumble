@@ -121,8 +121,32 @@ public actor TranscriptionEngine {
     /// - Parameter boostVocabulary: run CTC vocabulary rescoring. Only worth it on the final pass;
     ///   FluidAudio documents that boosting degrades on partial audio.
     public func transcribe(_ samples: [Float], boostVocabulary: Bool) async throws -> Transcript {
-        guard let manager else { throw EngineError.notLoaded }
+        guard manager != nil else { throw EngineError.notLoaded }
         let start = ContinuousClock.now
+
+        // Long recordings: transcribe pause-delimited pieces that each fit the model window,
+        // instead of letting FluidAudio stitch overlapping chunks (which can duplicate words).
+        let segments = AudioAnalysis.splitAtPauses(samples)
+        var texts: [String] = []
+        var applied: [String] = []
+        for range in segments {
+            let piece = try await transcribeSegment(Array(samples[range]), boostVocabulary: boostVocabulary)
+            if !piece.text.isEmpty { texts.append(piece.text) }
+            applied += piece.applied
+        }
+
+        let elapsed = start.duration(to: .now)
+        let ms = Int(elapsed.components.seconds * 1000 + elapsed.components.attoseconds / 1_000_000_000_000_000)
+        return Transcript(
+            text: texts.joined(separator: " "),
+            audioSeconds: Double(samples.count) / Double(AudioAnalysis.sampleRate),
+            processingMs: ms,
+            vocabularyApplied: applied
+        )
+    }
+
+    private func transcribeSegment(_ samples: [Float], boostVocabulary: Bool) async throws -> (text: String, applied: [String]) {
+        guard let manager else { throw EngineError.notLoaded }
 
         var padded = [Float](repeating: 0, count: Self.leadInSamples)
         padded.append(contentsOf: samples)
@@ -150,14 +174,7 @@ public actor TranscriptionEngine {
             text = guarded
         }
 
-        let elapsed = start.duration(to: .now)
-        let ms = Int(elapsed.components.seconds * 1000 + elapsed.components.attoseconds / 1_000_000_000_000_000)
-        return Transcript(
-            text: text.trimmingCharacters(in: .whitespacesAndNewlines),
-            audioSeconds: Double(samples.count) / Double(AudioAnalysis.sampleRate),
-            processingMs: ms,
-            vocabularyApplied: applied
-        )
+        return (text.trimmingCharacters(in: .whitespacesAndNewlines), applied)
     }
 
     @MainActor static func isDictionaryWord(_ word: String) -> Bool {

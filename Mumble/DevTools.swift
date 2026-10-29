@@ -1,5 +1,4 @@
 import AppKit
-@preconcurrency import AVFoundation
 import SwiftUI
 import MumbleASR
 import MumbleCore
@@ -22,11 +21,7 @@ enum DevTools {
             return true
         }
         if let i = args.firstIndex(of: "--e2e"), i + 1 < args.count {
-            Task { await E2ETest.run(controller, resultURL: URL(fileURLWithPath: args[i + 1])) }
-            return true
-        }
-        if args.contains("--tap-test") {
-            Task { await tapTest(inline: args.contains("inline")) }
+            Task { await E2ETest.run(controller, resultURL: URL(fileURLWithPath: args[i + 1]), arguments: args) }
             return true
         }
         if args.contains("--record-test") {
@@ -95,50 +90,6 @@ enum DevTools {
             }
         }
         print("RECORDTEST ok")
-        exit(0)
-    }
-
-    /// Exercises the audio-thread tap path without a microphone: a player node plays a tone
-    /// into the main mixer, which is tapped exactly like the mic input.
-    /// `inline` reproduces the old crashing pattern (closure written inside a @MainActor method).
-    private static func tapTest(inline: Bool) async {
-        let engine = AVAudioEngine()
-        let player = AVAudioPlayerNode()
-        engine.attach(player)
-        let format = engine.mainMixerNode.outputFormat(forBus: 0)
-        engine.connect(player, to: engine.mainMixerNode, format: format)
-        engine.mainMixerNode.outputVolume = 0
-
-        let recorder = AudioRecorder()
-        recorder.setCapturingForTesting(true)
-        let target = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 16_000, channels: 1, interleaved: false)!
-        let converter = AVAudioConverter(from: format, to: target)!
-        if inline {
-            engine.mainMixerNode.installTap(onBus: 0, bufferSize: 1_024, format: format) { _, _ in
-                _ = recorder.level
-            }
-        } else {
-            engine.mainMixerNode.installTap(
-                onBus: 0, bufferSize: 1_024, format: format, block: AudioRecorder.makeTapBlock(recorder, converter))
-        }
-
-        let tone = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(format.sampleRate))!
-        tone.frameLength = tone.frameCapacity
-        for ch in 0..<Int(format.channelCount) {
-            for i in 0..<Int(tone.frameLength) { tone.floatChannelData![ch][i] = 0.3 * sin(Float(i) * 0.05) }
-        }
-        do {
-            try engine.start()
-        } catch {
-            print("TAPTEST engine failed: \(error)")
-            exit(1)
-        }
-        player.scheduleBuffer(tone, at: nil, options: .loops, completionHandler: nil)
-        player.play()
-        try? await Task.sleep(for: .seconds(1.5))
-        engine.stop()
-        print(String(format: "TAPTEST %@ ok: %.2f s captured at 16 kHz, rms %.3f",
-                     inline ? "inline" : "factory", recorder.buffer.durationSeconds, AudioAnalysis.rms(recorder.buffer.snapshot())))
         exit(0)
     }
 
