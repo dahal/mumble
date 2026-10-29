@@ -1,4 +1,5 @@
 import AppKit
+import SwiftUI
 import MumbleASR
 
 /// Developer entry points, triggered by launch arguments:
@@ -18,7 +19,43 @@ enum DevTools {
             Task { await demoIsland(controller) }
             return true
         }
+        if let i = args.firstIndex(of: "--render-island"), i + 1 < args.count {
+            renderIsland(to: URL(fileURLWithPath: args[i + 1]))
+            exit(0)
+        }
         return false
+    }
+
+    /// Renders each island state to a PNG, for checking the design without screen recording.
+    private static func renderIsland(to dir: URL) {
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let states: [(String, IslandPhase, String, Bool)] = [
+            ("listening", .listening, "", false),
+            ("listening-preview", .listening, "Let's grab coffee at nine thirty and go over the", false),
+            ("latched", .listening, "", true),
+            ("finishing", .finishing, "Let's grab coffee at nine thirty and go over the roadmap", false),
+            ("done", .done("Let's grab coffee at nine thirty and go over the roadmap."), "", false),
+            ("notice", .notice("Secure field — copied to clipboard instead"), "", false),
+        ]
+        for hasNotch in [true, false] {
+            for (name, phase, preview, latched) in states {
+                let model = IslandModel()
+                model.phase = phase
+                model.previewText = preview
+                model.isLatched = latched
+                model.elapsed = 4.2
+                model.levels = (0..<14).map { Float(0.25 + 0.6 * abs(sin(Double($0) * 0.7))) }
+                let view = IslandView(model: model, notch: CGSize(width: 185, height: 32), hasNotch: hasNotch)
+                    .frame(width: 520, height: 180)
+                    .background(Color(white: 0.85))
+                let renderer = ImageRenderer(content: view)
+                renderer.scale = 2
+                if let image = renderer.nsImage, let tiff = image.tiffRepresentation,
+                   let png = NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:]) {
+                    try? png.write(to: dir.appending(path: "\(hasNotch ? "notch" : "floating")-\(name).png"))
+                }
+            }
+        }
     }
 
     private static func selfTest(_ controller: DictationController, path: String) async {

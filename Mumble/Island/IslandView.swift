@@ -95,7 +95,10 @@ struct IslandView: View {
         case .listening:
             WaveformBars(levels: model.levels)
         case .finishing:
-            ProgressView().controlSize(.small).tint(.white)
+            Image(systemName: "waveform")
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(.white)
+                .symbolEffect(.variableColor.iterative, options: .repeating)
         case .done:
             Image(systemName: "checkmark.circle.fill")
                 .foregroundStyle(.green)

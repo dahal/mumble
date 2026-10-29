@@ -46,6 +46,23 @@ struct TranscriptionEngineTests {
         #expect(tiny.processingMs < 1_000)
     }
 
+    @Test func vocabularyBoostingFixesNamesWithoutTouchingOtherWords() async throws {
+        try await Self.engine.load(.phonon2)
+        let clip = try Self.speech("Please ask Purushottam to review the Kubernetes config.")
+        let plain = try await Self.engine.transcribe(clip, boostVocabulary: false)
+        #expect(!plain.text.contains("Purushottam"), "baseline unexpectedly got the name: \(plain.text)")
+
+        try await Self.engine.setVocabulary([VocabularyEntry(term: "Purushottam"), VocabularyEntry(term: "pgvector")])
+        let boosted = try await Self.engine.transcribe(clip, boostVocabulary: true)
+        #expect(boosted.text.contains("Purushottam"), "got: \(boosted.text)")
+        #expect(boosted.text.contains("review the Kubernetes config"))
+
+        let unrelated = try await Self.engine.transcribe(
+            try Self.speech("The deployment failed because the database migration timed out."), boostVocabulary: true)
+        #expect(unrelated.text == "The deployment failed because the database migration timed out.")
+        try await Self.engine.setVocabulary([])
+    }
+
     @Test func normalizesNumbers() {
         #expect(TranscriptionEngine.normalize("it costs twenty five dollars").contains("$25"))
     }
