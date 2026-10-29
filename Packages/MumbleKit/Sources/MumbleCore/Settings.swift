@@ -101,7 +101,9 @@ public struct MumbleSettings: Codable, Sendable, Equatable {
     public init() {}
 
     public var pipelineOptions: TextPipelineOptions {
-        TextPipelineOptions(removeFillers: removeFillers, spokenCommands: spokenCommands, replacements: replacements)
+        TextPipelineOptions(
+            removeFillers: removeFillers, spokenCommands: spokenCommands, replacements: replacements,
+            vocabulary: vocabulary)
     }
 
     // Decode field by field so settings saved by an older build (missing keys) still load.

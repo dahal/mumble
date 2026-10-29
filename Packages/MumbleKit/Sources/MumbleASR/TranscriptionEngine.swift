@@ -1,3 +1,4 @@
+import AppKit
 import FluidAudio
 import Foundation
 import MumbleCore
@@ -108,8 +109,12 @@ public actor TranscriptionEngine {
         let terms = usable.map {
             CustomVocabularyTerm(text: $0.term, aliases: $0.aliases.isEmpty ? nil : $0.aliases)
         }
+        // Spotter rescue off: with it on, short and brand-like terms over-fire badly
+        // (in our eval it replaced "pods"/"cluster" with vocabulary terms). FluidAudio
+        // recommends this for short vocabularies.
         vocabularySession = try await VocabularyBoostingSession(
-            vocabulary: CustomVocabularyContext(terms: terms), ctcModels: ctc)
+            vocabulary: CustomVocabularyContext(terms: terms), ctcModels: ctc,
+            config: VocabularyRescorer.Config(spotterRescueEnabled: false))
     }
 
     /// Transcribes 16 kHz mono samples.
@@ -133,8 +138,16 @@ public actor TranscriptionEngine {
         if boostVocabulary, let session = vocabularySession, let timings = result.tokenTimings, !timings.isEmpty,
            session.hasCTCRescoringCandidates(text: text, tokenTimings: timings),
            let output = await session.rescore(text: text, tokenTimings: timings, audioSamples: padded) {
-            text = output.text
-            applied = output.replacements.filter(\.shouldReplace).compactMap(\.replacementWord)
+            let original = text
+            let terms = vocabularyEntries.map(\.term)
+            let guarded = await MainActor.run {
+                Vocabulary.guardRescore(
+                    original: original, rescored: output.text, terms: terms, isDictionaryWord: Self.isDictionaryWord)
+            }
+            if guarded != text {
+                applied = output.replacements.filter(\.shouldReplace).compactMap(\.replacementWord)
+            }
+            text = guarded
         }
 
         let elapsed = start.duration(to: .now)
@@ -145,6 +158,13 @@ public actor TranscriptionEngine {
             processingMs: ms,
             vocabularyApplied: applied
         )
+    }
+
+    @MainActor static func isDictionaryWord(_ word: String) -> Bool {
+        guard word.count > 1 else { return true }
+        let checker = NSSpellChecker.shared
+        let miss = checker.checkSpelling(of: word, startingAt: 0, language: "en", wrap: false, inSpellDocumentWithTag: 0, wordCount: nil)
+        return miss.location == NSNotFound
     }
 
     /// Inverse text normalization: "twenty five dollars" → "$25", "test at gmail dot com" → "test@gmail.com".

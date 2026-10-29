@@ -5,24 +5,30 @@ import MumbleCore
 // mumble-eval: transcribes every audio file in a directory and reports WER against
 // a sibling .txt reference with the same name.
 //
-//   swift run -c release mumble-eval <dir> [--model phonon2|ultra|v3|v2|small] [--raw] [--itn]
+//   swift run -c release mumble-eval <dir> [--model phonon2|ultra|v3|v2|small] [--raw] [--itn] [--vocab "term1,term2"]
 //
 // By default the app's text pipeline runs without number normalization (its default); --itn adds it,
 // --raw skips post-processing entirely.
 
 let args = CommandLine.arguments.dropFirst()
 guard let dir = args.first else {
-    print("usage: mumble-eval <dir> [--model phonon2|ultra|v3|v2|small] [--raw] [--itn]")
+    print("usage: mumble-eval <dir> [--model phonon2|ultra|v3|v2|small] [--raw] [--itn] [--vocab \"term1,term2\"]")
     exit(2)
 }
 let model = args.firstIndex(of: "--model").flatMap { args.index(after: $0) < args.endIndex ? args[args.index(after: $0)] : nil }
     .flatMap(SpeechModel.init(rawValue:)) ?? .phonon2
 let raw = args.contains("--raw")
 let itn = args.contains("--itn")
+let vocabulary = args.firstIndex(of: "--vocab").flatMap { args.index(after: $0) < args.endIndex ? args[args.index(after: $0)] : nil }
+    .map { $0.split(separator: ",").map { VocabularyEntry(term: $0.trimmingCharacters(in: .whitespaces)) } } ?? []
 
 let engine = TranscriptionEngine()
 print("Loading \(model.displayName)…")
 try await engine.load(model)
+if !vocabulary.isEmpty {
+    print("Boosting \(vocabulary.count) vocabulary terms")
+    try await engine.setVocabulary(vocabulary)
+}
 
 let files = try FileManager.default.contentsOfDirectory(at: URL(fileURLWithPath: dir), includingPropertiesForKeys: nil)
     .filter { ["wav", "m4a", "aiff", "aif", "caf", "mp3", "flac"].contains($0.pathExtension.lowercased()) }
@@ -31,10 +37,10 @@ let files = try FileManager.default.contentsOfDirectory(at: URL(fileURLWithPath:
 var totalErrors = 0, totalWords = 0, totalAudio = 0.0, totalMs = 0
 for file in files {
     let samples = try AudioFileLoader.samples(from: file)
-    let transcript = try await engine.transcribe(samples, boostVocabulary: false)
+    let transcript = try await engine.transcribe(samples, boostVocabulary: !vocabulary.isEmpty)
     let normalizer: ((String) -> String)? = itn ? { TranscriptionEngine.normalize($0) } : nil
     let text = raw ? transcript.text : TextPipeline.process(
-        transcript.text, options: TextPipelineOptions(), normalizer: normalizer)
+        transcript.text, options: TextPipelineOptions(vocabulary: vocabulary), normalizer: normalizer)
     totalAudio += transcript.audioSeconds
     totalMs += transcript.processingMs
 

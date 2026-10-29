@@ -17,11 +17,16 @@ public struct TextPipelineOptions: Sendable, Equatable {
     public var removeFillers: Bool
     public var spokenCommands: Bool
     public var replacements: [Replacement]
+    public var vocabulary: [VocabularyEntry]
 
-    public init(removeFillers: Bool = true, spokenCommands: Bool = true, replacements: [Replacement] = []) {
+    public init(
+        removeFillers: Bool = true, spokenCommands: Bool = true, replacements: [Replacement] = [],
+        vocabulary: [VocabularyEntry] = []
+    ) {
         self.removeFillers = removeFillers
         self.spokenCommands = spokenCommands
         self.replacements = replacements
+        self.vocabulary = vocabulary
     }
 }
 
@@ -40,6 +45,7 @@ public enum TextPipeline {
         if let normalizer { text = normalizer(text) }
         if options.removeFillers { text = removeFillers(text) }
         if options.spokenCommands { text = applySpokenCommands(text) }
+        text = Vocabulary.applyCanonicalForms(text, entries: options.vocabulary)
         text = applyReplacements(text, options.replacements)
         return tidy(text)
     }
