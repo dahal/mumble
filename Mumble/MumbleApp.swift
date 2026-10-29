@@ -9,7 +9,8 @@ struct MumbleApp: App {
         MenuBarExtra {
             MenuContent(controller: AppDelegate.controller, openSettings: AppDelegate.showSettings)
         } label: {
-            Image(systemName: AppDelegate.controller.isRecording ? "waveform.circle.fill" : "waveform")
+            Image(nsImage: AppDelegate.controller.isRecording ? MenuBarIcon.recording : MenuBarIcon.idle)
+                .renderingMode(.original)
         }
     }
 }

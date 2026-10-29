@@ -46,6 +46,24 @@ enum DevTools {
             ("done", .done("Let's grab coffee at nine thirty and go over the roadmap."), "", false),
             ("notice", .notice("Secure field — copied to clipboard instead"), "", false),
         ]
+        // Menu bar icons at 4×, on light and dark menu bar backgrounds.
+        for (name, icon) in [("menubar-idle", MenuBarIcon.idle), ("menubar-recording", MenuBarIcon.recording)] {
+            for (bg, color) in [("light", NSColor(white: 0.93, alpha: 1)), ("dark", NSColor(white: 0.12, alpha: 1))] {
+                let scale: CGFloat = 4
+                let rep = NSBitmapImageRep(
+                    bitmapDataPlanes: nil, pixelsWide: Int(40 * scale), pixelsHigh: Int(24 * scale), bitsPerSample: 8,
+                    samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0,
+                    bitsPerPixel: 0)!
+                rep.size = NSSize(width: 40, height: 24)
+                NSGraphicsContext.saveGraphicsState()
+                NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
+                color.setFill()
+                NSRect(x: 0, y: 0, width: 40, height: 24).fill()
+                icon.draw(in: NSRect(x: 10, y: 3, width: 20, height: 18))
+                NSGraphicsContext.restoreGraphicsState()
+                try? rep.representation(using: .png, properties: [:])?.write(to: dir.appending(path: "\(name)-\(bg).png"))
+            }
+        }
         for hasNotch in [true, false] {
             for (name, phase, preview, latched) in states {
                 let model = IslandModel()
