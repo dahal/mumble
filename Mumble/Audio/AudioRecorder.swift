@@ -1,4 +1,5 @@
 @preconcurrency import AVFoundation
+import AudioToolbox
 import MumbleCore
 import Synchronization
 
@@ -38,12 +39,20 @@ final class AudioRecorder: @unchecked Sendable {
 
     static let standbySeconds: Double = 8
 
+    /// Input device chosen in settings; nil = Automatic (see `AudioDevices.resolveInput`).
+    @MainActor var preferredInputUID: String? {
+        didSet { if preferredInputUID != oldValue { tearDown() } }
+    }
+    /// Name of the device the running engine records from, for logging and UI.
+    @MainActor private(set) var activeDeviceName: String?
+
     init() {
         configObserver = NotificationCenter.default.addObserver(
             forName: .AVAudioEngineConfigurationChange, object: engine, queue: .main
         ) { [weak self] _ in
-            // The input device or its format changed (e.g. AirPods connected). Rebuild on next start.
-            MainActor.assumeIsolated { self?.tearDown() }
+            // The input device or its format changed (e.g. headphones connected); the engine has
+            // stopped itself. Rebuild now if a dictation is in progress, otherwise on next start.
+            MainActor.assumeIsolated { self?.handleConfigurationChange() }
         }
     }
 
@@ -73,8 +82,30 @@ final class AudioRecorder: @unchecked Sendable {
     }
 
     @MainActor
+    private func handleConfigurationChange() {
+        let wasCapturing = capturing.load(ordering: .acquiring)
+        tearDown()
+        guard wasCapturing else { return }
+        AppLog.info("Audio configuration changed mid-dictation; restarting input")
+        do {
+            try startEngine()
+            capturing.store(true, ordering: .releasing)
+        } catch {
+            AppLog.error("Could not restart input: \(error)")
+        }
+    }
+
+    @MainActor
     private func startEngine() throws {
         let input = engine.inputNode
+        if let device = AudioDevices.resolveInput(preferredUID: preferredInputUID), let unit = input.audioUnit {
+            var id = device.id
+            let status = AudioUnitSetProperty(
+                unit, kAudioOutputUnitProperty_CurrentDevice, kAudioUnitScope_Global, 0,
+                &id, UInt32(MemoryLayout<AudioDeviceID>.size))
+            activeDeviceName = status == noErr ? device.name : AudioDevices.defaultInput()?.name
+            if status != noErr { AppLog.error("Could not select input \(device.name): OSStatus \(status)") }
+        }
         let format = input.outputFormat(forBus: 0)
         guard format.sampleRate > 0, format.channelCount > 0 else { throw RecorderError.noInputDevice }
         guard let converter = AVAudioConverter(from: format, to: targetFormat) else {
@@ -83,9 +114,7 @@ final class AudioRecorder: @unchecked Sendable {
         self.converter = converter
         preroll.withLock { $0.removeAll(keepingCapacity: true) }
 
-        input.installTap(onBus: 0, bufferSize: 1_024, format: format) { [weak self] pcm, _ in
-            self?.process(pcm, converter: converter)
-        }
+        input.installTap(onBus: 0, bufferSize: 1_024, format: format, block: Self.makeTapBlock(self, converter))
         engine.prepare()
         do {
             try engine.start()
@@ -104,6 +133,15 @@ final class AudioRecorder: @unchecked Sendable {
         engine.stop()
         isEngineRunning = false
         converter = nil
+    }
+
+    /// Builds the tap callback outside any actor. A closure written inline in a `@MainActor`
+    /// method inherits main-actor isolation, and Swift 6 traps at runtime when CoreAudio calls
+    /// it on the real-time audio thread (this crashed every recording).
+    nonisolated static func makeTapBlock(
+        _ recorder: AudioRecorder, _ converter: AVAudioConverter
+    ) -> AVAudioNodeTapBlock {
+        { [weak recorder] pcm, _ in recorder?.process(pcm, converter: converter) }
     }
 
     /// Runs on the audio thread.
@@ -137,6 +175,9 @@ final class AudioRecorder: @unchecked Sendable {
             }
         }
     }
+
+    /// Dev-only: makes `process` take the capture path without starting the microphone.
+    func setCapturingForTesting(_ on: Bool) { capturing.store(on, ordering: .releasing) }
 
     static var permission: AVAuthorizationStatus {
         AVCaptureDevice.authorizationStatus(for: .audio)

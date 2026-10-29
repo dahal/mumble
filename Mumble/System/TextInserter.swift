@@ -9,15 +9,20 @@ enum TextInserter {
         case inserted
         /// A password field is focused; the text was only copied.
         case copiedSecureField
+        /// Without Accessibility, synthetic ⌘V is silently dropped; the text was only copied.
+        case copiedNoAccessibility
     }
 
     static func insert(_ text: String) async -> Outcome {
         let pasteboard = NSPasteboard.general
 
         if IsSecureEventInputEnabled() {
-            pasteboard.clearContents()
-            pasteboard.setString(text, forType: .string)
+            copy(text)
             return .copiedSecureField
+        }
+        if !AXIsProcessTrusted() {
+            copy(text)
+            return .copiedNoAccessibility
         }
 
         let saved = snapshot(pasteboard)

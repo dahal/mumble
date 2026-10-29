@@ -48,6 +48,7 @@ struct GeneralPane: View {
     let controller: DictationController
     @State private var micStatus = AudioRecorder.permission
     @State private var launchAtLogin = Permissions.launchesAtLogin
+    @State private var inputDevices = AudioDevices.inputDevices()
 
     private func binding<T>(_ keyPath: WritableKeyPath<MumbleSettings, T>) -> Binding<T> {
         Binding(get: { controller.settings[keyPath: keyPath] }, set: { value in controller.update { $0[keyPath: keyPath] = value } })
@@ -91,6 +92,14 @@ struct GeneralPane: View {
                 }
                 Text("Hold to dictate, release to insert. Double-tap to lock hands-free, press again to finish. Esc cancels.")
                     .font(.callout).foregroundStyle(.secondary)
+                Picker("Microphone", selection: binding(\.inputDeviceUID)) {
+                    Text("Automatic").tag(String?.none)
+                    ForEach(inputDevices) { device in
+                        Text(device.name + (device.isBluetooth ? " (Bluetooth)" : "")).tag(Optional(device.uid))
+                    }
+                }
+                Text("Automatic uses your system microphone, but switches to the built-in mic when that's a Bluetooth headset. Bluetooth mics lower accuracy and make headphone audio sound worse while recording.")
+                    .font(.callout).foregroundStyle(.secondary)
                 Picker("Speech model", selection: binding(\.model)) {
                     ForEach(SpeechModel.allCases) { model in
                         Text("\(model.displayName) — \(model.tier)").tag(model)
@@ -131,6 +140,8 @@ struct GeneralPane: View {
         .task {
             while !Task.isCancelled {
                 micStatus = AudioRecorder.permission
+                let devices = AudioDevices.inputDevices()
+                if devices != inputDevices { inputDevices = devices }
                 try? await Task.sleep(for: .seconds(1))
             }
         }

@@ -64,6 +64,7 @@ struct MenuContent: View {
             Button("Paste last again") { controller.reinsertLast() }
             Divider()
         }
+        Button("Show Log") { AppLog.reveal() }
         Button("Settings…") { openSettings() }
             .keyboardShortcut(",")
         Button("Quit Mumble") { NSApp.terminate(nil) }

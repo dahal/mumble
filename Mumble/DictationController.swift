@@ -2,7 +2,6 @@ import AppKit
 import MumbleASR
 import MumbleCore
 import Observation
-import os
 
 enum ModelStatus: Equatable {
     case idle
@@ -30,7 +29,6 @@ final class DictationController {
     @ObservationIgnored private let hotkey = HotkeyMonitor()
     @ObservationIgnored private var gesture = HotkeyGesture()
     @ObservationIgnored private let historyStore = HistoryStore(fileURL: HistoryStore.defaultURL)
-    @ObservationIgnored private let log = Logger(subsystem: "dev.mumble.Mumble", category: "dictation")
 
     @ObservationIgnored private var session: UUID?
     @ObservationIgnored private var recordingStartedAt: ContinuousClock.Instant?
@@ -60,6 +58,12 @@ final class DictationController {
     // MARK: Lifecycle
 
     func start() {
+        AppLog.info("Launch \(Bundle.main.infoDictionary?["CFBundleShortVersionString"] ?? "?"); model \(settings.model.rawValue), trigger \(settings.triggerKey), accessibility \(Permissions.isAccessibilityTrusted), mic \(AudioRecorder.permission.rawValue)")
+        // Ask for the microphone up front, so the first key press records instead of prompting.
+        if AudioRecorder.permission == .notDetermined {
+            Task { AppLog.info("Microphone permission granted: \(await AudioRecorder.requestPermission())") }
+        }
+        recorder.preferredInputUID = settings.inputDeviceUID
         hotkey.trigger = settings.triggerKey
         hotkey.onPress = { [weak self] in self?.apply(self?.gesture.press(at: Self.now) ?? .none) }
         hotkey.onRelease = { [weak self] in self?.apply(self?.gesture.release(at: Self.now) ?? .none) }
@@ -87,6 +91,7 @@ final class DictationController {
             gesture.reset()
         }
         if settings.model != old.model { loadModel() }
+        if settings.inputDeviceUID != old.inputDeviceUID { recorder.preferredInputUID = settings.inputDeviceUID }
         if settings.vocabulary != old.vocabulary { applyVocabulary() }
         if !settings.keepHistory, old.keepHistory { clearHistory() }
     }
@@ -105,11 +110,11 @@ final class DictationController {
                 }
                 guard !Task.isCancelled else { return }
                 modelStatus = .ready
-                log.info("Model \(model.rawValue, privacy: .public) ready")
+                AppLog.info("Model \(model.rawValue) ready")
             } catch {
                 guard !Task.isCancelled else { return }
                 modelStatus = .failed(error.localizedDescription)
-                log.error("Model load failed: \(error.localizedDescription, privacy: .public)")
+                AppLog.error("Model load failed: \(error)")
             }
         }
     }
@@ -175,7 +180,11 @@ final class DictationController {
         case .authorized: break
         case .notDetermined:
             gesture.reset()
-            Task { _ = await AudioRecorder.requestPermission() }
+            Task {
+                let granted = await AudioRecorder.requestPermission()
+                AppLog.info("Microphone permission granted: \(granted)")
+                notify(granted ? "Microphone on. Hold the key again to dictate." : "Microphone access was denied.")
+            }
             return
         default:
             gesture.reset()
@@ -188,9 +197,11 @@ final class DictationController {
             try recorder.start()
         } catch {
             gesture.reset()
+            AppLog.error("Recorder failed to start: \(error)")
             notify(error.localizedDescription)
             return
         }
+        AppLog.info("Recording started on \(recorder.activeDeviceName ?? "default input")")
         let id = UUID()
         session = id
         recordingStartedAt = .now
@@ -222,8 +233,15 @@ final class DictationController {
         let samples = recorder.buffer.snapshot()
         stopCapture()
 
-        if samples.count < AudioAnalysis.sampleRate / 4 || AudioAnalysis.isLikelySilence(samples) {
+        let seconds = Double(samples.count) / Double(AudioAnalysis.sampleRate)
+        AppLog.info(String(format: "Recording stopped: %.2f s, peak %.4f, rms %.4f",
+                           seconds, AudioAnalysis.peak(samples), AudioAnalysis.rms(samples)))
+        if samples.count < AudioAnalysis.sampleRate / 4 {
             islandPanel.hide()
+            return
+        }
+        if AudioAnalysis.isLikelySilence(samples) {
+            notify("Didn't hear anything. Check the input device in Sound settings.")
             return
         }
 
@@ -232,8 +250,9 @@ final class DictationController {
 
         do {
             let (text, transcript) = try await transcribeForInsertion(samples)
+            AppLog.info("Transcribed \(transcript.audioSeconds) s in \(transcript.processingMs) ms → \(text.count) chars")
             guard !text.isEmpty else {
-                islandPanel.hide()
+                notify("Didn't catch any words.")
                 return
             }
 
@@ -243,7 +262,7 @@ final class DictationController {
             let elapsed = released.duration(to: .now)
             let latency = Int(elapsed.components.seconds * 1000 + elapsed.components.attoseconds / 1_000_000_000_000_000)
             lastLatencyMs = latency
-            log.info("Inserted \(text.count) chars; \(transcript.processingMs) ms ASR, \(latency) ms release→paste")
+            AppLog.info("Insert outcome \(outcome); \(latency) ms release→paste")
 
             record(HistoryItem(
                 text: text, rawText: transcript.text, audioSeconds: transcript.audioSeconds, latencyMs: latency,
@@ -256,8 +275,12 @@ final class DictationController {
             case .copiedSecureField:
                 island.phase = .notice("Secure field — copied to clipboard instead")
                 islandPanel.hide(after: .seconds(2))
+            case .copiedNoAccessibility:
+                island.phase = .notice("Copied. Grant Accessibility in Settings to paste automatically.")
+                islandPanel.hide(after: .seconds(3))
             }
         } catch {
+            AppLog.error("Transcription failed: \(error)")
             notify("Transcription failed: \(error.localizedDescription)")
         }
     }

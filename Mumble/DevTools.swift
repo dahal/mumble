@@ -1,6 +1,8 @@
 import AppKit
+@preconcurrency import AVFoundation
 import SwiftUI
 import MumbleASR
+import MumbleCore
 
 /// Developer entry points, triggered by launch arguments:
 ///
@@ -17,6 +19,18 @@ enum DevTools {
         }
         if args.contains("--demo-island") {
             Task { await demoIsland(controller) }
+            return true
+        }
+        if let i = args.firstIndex(of: "--e2e"), i + 1 < args.count {
+            Task { await E2ETest.run(controller, resultURL: URL(fileURLWithPath: args[i + 1])) }
+            return true
+        }
+        if args.contains("--tap-test") {
+            Task { await tapTest(inline: args.contains("inline")) }
+            return true
+        }
+        if args.contains("--record-test") {
+            Task { await recordTest() }
             return true
         }
         if let i = args.firstIndex(of: "--render-island"), i + 1 < args.count {
@@ -56,6 +70,76 @@ enum DevTools {
                 }
             }
         }
+    }
+
+    /// Records from the real microphone twice in a row (the pattern that used to crash on the
+    /// audio thread) and prints what was captured. Never prompts for permission.
+    private static func recordTest() async {
+        guard AudioRecorder.permission == .authorized else {
+            print("RECORDTEST microphone not authorized for this process (status \(AudioRecorder.permission.rawValue))")
+            exit(2)
+        }
+        let recorder = AudioRecorder()
+        for round in 1...3 {
+            do {
+                try recorder.start()
+                try? await Task.sleep(for: .seconds(1.5))
+                let samples = recorder.buffer.snapshot()
+                recorder.stop()
+                print(String(format: "RECORDTEST round %d: %.2f s captured, rms %.5f, level %.2f",
+                             round, Double(samples.count) / 16_000, AudioAnalysis.rms(samples), recorder.level))
+                try? await Task.sleep(for: .milliseconds(round == 2 ? 9_000 : 300))  // round 3 starts cold
+            } catch {
+                print("RECORDTEST round \(round) failed: \(error)")
+                exit(1)
+            }
+        }
+        print("RECORDTEST ok")
+        exit(0)
+    }
+
+    /// Exercises the audio-thread tap path without a microphone: a player node plays a tone
+    /// into the main mixer, which is tapped exactly like the mic input.
+    /// `inline` reproduces the old crashing pattern (closure written inside a @MainActor method).
+    private static func tapTest(inline: Bool) async {
+        let engine = AVAudioEngine()
+        let player = AVAudioPlayerNode()
+        engine.attach(player)
+        let format = engine.mainMixerNode.outputFormat(forBus: 0)
+        engine.connect(player, to: engine.mainMixerNode, format: format)
+        engine.mainMixerNode.outputVolume = 0
+
+        let recorder = AudioRecorder()
+        recorder.setCapturingForTesting(true)
+        let target = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 16_000, channels: 1, interleaved: false)!
+        let converter = AVAudioConverter(from: format, to: target)!
+        if inline {
+            engine.mainMixerNode.installTap(onBus: 0, bufferSize: 1_024, format: format) { _, _ in
+                _ = recorder.level
+            }
+        } else {
+            engine.mainMixerNode.installTap(
+                onBus: 0, bufferSize: 1_024, format: format, block: AudioRecorder.makeTapBlock(recorder, converter))
+        }
+
+        let tone = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(format.sampleRate))!
+        tone.frameLength = tone.frameCapacity
+        for ch in 0..<Int(format.channelCount) {
+            for i in 0..<Int(tone.frameLength) { tone.floatChannelData![ch][i] = 0.3 * sin(Float(i) * 0.05) }
+        }
+        do {
+            try engine.start()
+        } catch {
+            print("TAPTEST engine failed: \(error)")
+            exit(1)
+        }
+        player.scheduleBuffer(tone, at: nil, options: .loops, completionHandler: nil)
+        player.play()
+        try? await Task.sleep(for: .seconds(1.5))
+        engine.stop()
+        print(String(format: "TAPTEST %@ ok: %.2f s captured at 16 kHz, rms %.3f",
+                     inline ? "inline" : "factory", recorder.buffer.durationSeconds, AudioAnalysis.rms(recorder.buffer.snapshot())))
+        exit(0)
     }
 
     private static func selfTest(_ controller: DictationController, path: String) async {

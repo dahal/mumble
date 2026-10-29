@@ -94,6 +94,8 @@ public struct MumbleSettings: Codable, Sendable, Equatable {
     public var playSounds = true
     public var showLivePreview = true
     public var keepHistory = true
+    /// Core Audio UID of the chosen microphone; nil = Automatic.
+    public var inputDeviceUID: String?
     public var historyLimit = 200
     public var vocabulary: [VocabularyEntry] = []
     public var replacements: [Replacement] = []
@@ -120,6 +122,7 @@ public struct MumbleSettings: Codable, Sendable, Equatable {
         playSounds = try c.decodeIfPresent(Bool.self, forKey: .playSounds) ?? d.playSounds
         showLivePreview = try c.decodeIfPresent(Bool.self, forKey: .showLivePreview) ?? d.showLivePreview
         keepHistory = try c.decodeIfPresent(Bool.self, forKey: .keepHistory) ?? d.keepHistory
+        inputDeviceUID = try c.decodeIfPresent(String.self, forKey: .inputDeviceUID)
         historyLimit = try c.decodeIfPresent(Int.self, forKey: .historyLimit) ?? d.historyLimit
         vocabulary = try c.decodeIfPresent([VocabularyEntry].self, forKey: .vocabulary) ?? d.vocabulary
         replacements = try c.decodeIfPresent([Replacement].self, forKey: .replacements) ?? d.replacements

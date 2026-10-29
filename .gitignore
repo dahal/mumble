@@ -7,3 +7,4 @@ DerivedData/
 .swiftpm/
 Mumble.xcodeproj/
 Eval/tts/
+.signing/
