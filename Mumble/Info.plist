@@ -25,7 +25,7 @@
 	<key>LSUIElement</key>
 	<true/>
 	<key>NSHumanReadableCopyright</key>
-	<string>Runs fully on-device.</string>
+	<string>© 2026 Puru Dahal. Licensed under AGPL-3.0.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Mumble listens only while you hold the dictation key, and transcribes on this Mac.</string>
 </dict>

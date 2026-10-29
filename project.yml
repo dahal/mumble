@@ -30,7 +30,7 @@ targets:
         LSUIElement: true
         LSApplicationCategoryType: public.app-category.productivity
         NSMicrophoneUsageDescription: Mumble listens only while you hold the dictation key, and transcribes on this Mac.
-        NSHumanReadableCopyright: Runs fully on-device.
+        NSHumanReadableCopyright: "© 2026 Puru Dahal. Licensed under AGPL-3.0."
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dev.mumble.Mumble

@@ -185,3 +185,17 @@ It also records the output device's sample rate to prove Bluetooth audio isn't d
 
 The test sets are synthetic speech from `say`, so treat these as smoke tests. Real recorded dictation
 belongs in `Eval/` before claiming accuracy numbers.
+
+## License
+
+Mumble is free software, licensed under the [GNU Affero General Public License v3.0](LICENSE)
+(AGPL-3.0-only). You may use, study, modify and share it; if you distribute a modified version, or
+let others use one over a network, you must make your source code available under the same license.
+
+Third-party components:
+
+- [FluidAudio](https://github.com/FluidInference/FluidAudio) (Apache-2.0), including its NeMo text
+  normalization library. Apache-2.0 code may be combined into AGPL-3.0 software.
+- Speech models are not bundled. They are downloaded on first use from
+  [FluidInference on Hugging Face](https://huggingface.co/FluidInference) under their own licenses
+  (see each model card).
