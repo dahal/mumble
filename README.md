@@ -1,7 +1,17 @@
-# Mumble
+<p align="center">
+  <img src="Design/AppIcon.png" alt="Mumble app icon" width="160" height="160">
+</p>
 
-Fast, accurate, fully on-device dictation for the Mac. Hold a key, speak, release: the text appears
-wherever your cursor is. Speech recognition runs on the Apple Neural Engine via
+<h1 align="center">Mumble</h1>
+
+<p align="center">
+  Fast, accurate, fully on-device dictation for the Mac.<br>
+  Hold a key, speak, release: the text appears wherever your cursor is.
+</p>
+
+---
+
+ Speech recognition runs on the Apple Neural Engine via
 [FluidAudio](https://github.com/FluidInference/FluidAudio) (NVIDIA Parakeet-family models).
 Audio and text never leave your Mac.
 
