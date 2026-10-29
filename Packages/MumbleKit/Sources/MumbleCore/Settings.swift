@@ -87,7 +87,9 @@ public struct MumbleSettings: Codable, Sendable, Equatable {
     public var model: SpeechModel = .phonon2
     public var removeFillers = true
     public var spokenCommands = true
-    public var inverseTextNormalization = true
+    /// Off by default: FluidAudio's ITN occasionally changes meaning ("at nine thirty and go" → "at 39 go"),
+    /// while the raw model output is already readable. Exposed as an experimental toggle.
+    public var inverseTextNormalization = false
     public var smartSpacing = true
     public var playSounds = true
     public var showLivePreview = true

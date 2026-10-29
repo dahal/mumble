@@ -1,4 +1,4 @@
-import AVFoundation
+@preconcurrency import AVFoundation
 import Foundation
 import MumbleASR
 import MumbleCore
@@ -6,16 +6,20 @@ import MumbleCore
 // mumble-eval: transcribes every audio file in a directory and reports WER against
 // a sibling .txt reference with the same name.
 //
-//   swift run -c release mumble-eval <dir> [--model phonon2|ultra|v3|v2|small] [--raw]
+//   swift run -c release mumble-eval <dir> [--model phonon2|ultra|v3|v2|small] [--raw] [--itn]
+//
+// By default the app's text pipeline runs without number normalization (its default); --itn adds it,
+// --raw skips post-processing entirely.
 
 let args = CommandLine.arguments.dropFirst()
 guard let dir = args.first else {
-    print("usage: mumble-eval <dir> [--model phonon2|ultra|v3|v2|small] [--raw]")
+    print("usage: mumble-eval <dir> [--model phonon2|ultra|v3|v2|small] [--raw] [--itn]")
     exit(2)
 }
 let model = args.firstIndex(of: "--model").flatMap { args.index(after: $0) < args.endIndex ? args[args.index(after: $0)] : nil }
     .flatMap(SpeechModel.init(rawValue:)) ?? .phonon2
 let raw = args.contains("--raw")
+let itn = args.contains("--itn")
 
 func loadSamples(_ url: URL) throws -> [Float] {
     let file = try AVAudioFile(forReading: url)
@@ -50,8 +54,9 @@ var totalErrors = 0, totalWords = 0, totalAudio = 0.0, totalMs = 0
 for file in files {
     let samples = try loadSamples(file)
     let transcript = try await engine.transcribe(samples, boostVocabulary: false)
+    let normalizer: ((String) -> String)? = itn ? { TranscriptionEngine.normalize($0) } : nil
     let text = raw ? transcript.text : TextPipeline.process(
-        transcript.text, options: TextPipelineOptions(), normalizer: TranscriptionEngine.normalize)
+        transcript.text, options: TextPipelineOptions(), normalizer: normalizer)
     totalAudio += transcript.audioSeconds
     totalMs += transcript.processingMs
 
