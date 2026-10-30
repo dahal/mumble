@@ -1,6 +1,6 @@
 import AppKit
 
-/// The menu bar icon: a crisp vector miniature of the app icon (coral-to-amber rounded square with
+/// The menu bar icon: a crisp vector miniature of the app icon (pink-to-amber rounded square with
 /// a cream voice wave), in full color so it stands out. While recording it inverts to a white
 /// square with a coral wave.
 ///
@@ -9,16 +9,16 @@ enum MenuBarIcon {
     static let idle = make(recording: false)
     static let recording = make(recording: true)
 
-    // Sampled from Design/AppIcon-source.png.
-    private static let pink = NSColor(srgbRed: 0.98, green: 0.24, blue: 0.31, alpha: 1)    // #FA3C50
-    private static let coral = NSColor(srgbRed: 1.00, green: 0.40, blue: 0.32, alpha: 1)   // #FF6551
-    private static let amber = NSColor(srgbRed: 1.00, green: 0.70, blue: 0.35, alpha: 1)   // toward #FDD57D
-    private static let cream = NSColor(srgbRed: 0.99, green: 0.94, blue: 0.89, alpha: 1)   // #FCEFE4
+    // Sampled from Design/AppIcon-macOS-source.png.
+    private static let pink = NSColor(srgbRed: 0.99, green: 0.07, blue: 0.40, alpha: 1)    // #FC1165
+    private static let coral = NSColor(srgbRed: 0.99, green: 0.19, blue: 0.31, alpha: 1)   // #FC314E
+    private static let amber = NSColor(srgbRed: 0.99, green: 0.69, blue: 0.23, alpha: 1)   // #FCB03A
+    private static let cream = NSColor(srgbRed: 1.00, green: 0.97, blue: 0.93, alpha: 1)   // #FFF8ED
 
     /// The wave's shape in the artwork, as (x, y) fractions of the square, y measured from the top.
     private static let wave: [CGPoint] = [
-        (0.00, 0.49), (0.14, 0.48), (0.22, 0.40), (0.32, 0.60), (0.45, 0.24),
-        (0.58, 0.76), (0.69, 0.38), (0.79, 0.56), (0.87, 0.46), (1.00, 0.49),
+        (0.00, 0.50), (0.12, 0.50), (0.22, 0.42), (0.315, 0.58), (0.455, 0.26),
+        (0.57, 0.70), (0.68, 0.40), (0.78, 0.56), (0.87, 0.47), (0.95, 0.50), (1.00, 0.50),
     ].map { CGPoint(x: $0.0, y: $0.1) }
 
     static func make(recording: Bool) -> NSImage {
