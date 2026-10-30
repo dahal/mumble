@@ -127,7 +127,7 @@ scripts/sign.sh              Developer ID or stable self-signed signing, hardene
 scripts/package.sh           dmg + zip + checksums in build/dist (notarizes when configured)
 scripts/install.sh           the curl | bash installer users run
 .github/workflows/           CI and release
-scripts/make-icon.swift      renders the app icon
+scripts/make-icon.sh         updates Mumble/AppIcon.icon (Icon Composer) from artwork
 project.yml                  XcodeGen project definition
 ```
 

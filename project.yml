@@ -5,6 +5,12 @@ options:
   deploymentTarget:
     macOS: "15.0"
   createIntermediateGroups: true
+  # Icon Composer documents (.icon) are bundles; treat them as one resource so Xcode compiles
+  # them into the asset catalog (macOS 26 full-bleed icon + generated icons for older macOS).
+  fileTypes:
+    icon:
+      file: true
+      buildPhase: resources
 
 packages:
   MumbleKit:
