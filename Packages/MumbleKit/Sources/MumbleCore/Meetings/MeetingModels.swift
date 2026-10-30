@@ -221,6 +221,10 @@ public struct MeetingSpeaker: Codable, Sendable, Hashable {
     }
 
     public var isMe: Bool { speakerKey == Self.meKey }
+
+    /// Label of a voice the user marked "Not a person" (a TV, a notification sound…); hidden everywhere.
+    public static let ignoredLabel = "Not a person"
+    public var isIgnored: Bool { label == Self.ignoredLabel && personID == nil }
 }
 
 /// A run of speech by one speaker. Times are seconds since the meeting started.

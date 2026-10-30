@@ -1,4 +1,5 @@
 import AppKit
+import MumbleCore
 import SwiftUI
 
 @main
@@ -7,9 +8,9 @@ struct MumbleApp: App {
 
     var body: some Scene {
         MenuBarExtra {
-            MenuContent(controller: AppDelegate.controller, openSettings: AppDelegate.showSettings)
+            MenuContent(controller: AppDelegate.controller, meetings: AppDelegate.meetings, openSettings: AppDelegate.showSettings)
         } label: {
-            Image(nsImage: AppDelegate.controller.isRecording ? MenuBarIcon.recording : MenuBarIcon.idle)
+            Image(nsImage: AppDelegate.controller.isRecording || AppDelegate.meetings.isRecording ? MenuBarIcon.recording : MenuBarIcon.idle)
                 .renderingMode(.original)
         }
     }
@@ -18,11 +19,14 @@ struct MumbleApp: App {
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     static let controller = DictationController()
+    static let meetings = MeetingController(dictation: controller)
     private static var settingsWindow: NSWindow?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        AppNavigation.shared.openWindow = { Self.showSettings() }
         if DevTools.runIfRequested(Self.controller) { return }
         Self.controller.start()
+        Self.meetings.start()
         // First run, or a permission is missing: open settings so onboarding is visible.
         let onboarded = UserDefaults.standard.bool(forKey: "onboarded")
         if !onboarded || !Permissions.isAccessibilityTrusted || AudioRecorder.permission != .authorized {
@@ -34,12 +38,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     static func showSettings() {
         if settingsWindow == nil {
             let window = NSWindow(
-                contentRect: NSRect(x: 0, y: 0, width: 680, height: 560),
+                contentRect: NSRect(x: 0, y: 0, width: 900, height: 660),
                 styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
                 backing: .buffered, defer: false)
             window.title = "Mumble"
             window.isReleasedWhenClosed = false
-            window.contentView = NSHostingView(rootView: SettingsView(controller: controller))
+            window.contentView = NSHostingView(rootView: SettingsView(controller: controller, meetings: meetings))
             window.center()
             settingsWindow = window
         }
@@ -50,6 +54,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
 struct MenuContent: View {
     let controller: DictationController
+    let meetings: MeetingController
     let openSettings: () -> Void
 
     var body: some View {
@@ -57,6 +62,21 @@ struct MenuContent: View {
         if !controller.accessibilityTrusted {
             Button("⚠︎ Grant Accessibility access…") { Permissions.requestAccessibility() }
         }
+        Divider()
+        if let title = meetings.askingTitle {
+            Button("Take Notes for \(title)") { meetings.takeNotes() }
+        }
+        if meetings.isRecording {
+            Button("Stop Meeting Notes") { meetings.stop() }
+            Button("Bookmark This Moment") { meetings.bookmark() }
+            if meetings.prefs.privateNotesWhileMeeting {
+                Text("Hold \(controller.settings.triggerKey.displayName) to add a private note")
+            }
+        } else if meetings.askingTitle == nil {
+            Button("Start Meeting Notes") { meetings.toggle() }
+                .disabled(meetings.store == nil)
+        }
+        Button("Meetings…") { AppNavigation.shared.showMeeting(nil) }
         Divider()
         if let last = controller.history.first {
             Button("Copy last: \(last.text.prefix(40))\(last.text.count > 40 ? "…" : "")") {
@@ -73,7 +93,8 @@ struct MenuContent: View {
     }
 
     private var statusLine: String {
-        switch controller.modelStatus {
+        if meetings.isRecording { return "Taking meeting notes · \(MarkdownExporter.timestamp(meetings.elapsed))" }
+        return switch controller.modelStatus {
         case .idle: "Starting…"
         case let .loading(progress, label): "\(label) \(Int(progress * 100))%"
         case .ready: "Hold \(controller.settings.triggerKey.displayName) to dictate"

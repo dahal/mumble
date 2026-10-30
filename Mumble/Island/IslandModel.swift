@@ -7,6 +7,19 @@ enum IslandPhase: Equatable {
     case finishing
     case done(String)
     case notice(String)
+    /// Taking meeting notes: live speaker + text, red dot and timer.
+    case meeting
+    /// A meeting started: "Pricing page rollout · Take notes?" with Take Notes and ×.
+    case suggest(title: String, appBundleID: String?)
+    /// One minute before a calendar meeting.
+    case headsUp(title: String)
+
+    var isInteractive: Bool {
+        switch self {
+        case .suggest, .headsUp: true
+        default: false
+        }
+    }
 }
 
 @MainActor @Observable
@@ -18,6 +31,14 @@ final class IslandModel {
     var isLatched = false
     var elapsed: Double = 0
     var showPreview = true
+    /// Name shown before the live meeting line ("Sarah Chen", "You").
+    var meetingSpeaker = ""
+    /// Brief confirmation in the meeting island ("Bookmarked").
+    var flash: String?
+    /// The phase to return to when a dictation finishes during a meeting.
+    var restingPhase: IslandPhase?
+    @ObservationIgnored var onTakeNotes: () -> Void = {}
+    @ObservationIgnored var onDismiss: () -> Void = {}
 
     func pushLevel(_ value: Float) {
         level = value

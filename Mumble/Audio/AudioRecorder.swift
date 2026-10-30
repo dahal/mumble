@@ -25,6 +25,14 @@ final class AudioRecorder: NSObject, @unchecked Sendable {
     }
 
     let buffer = SampleBuffer(reservingSeconds: 120)
+    /// Meeting recording: receives every captured chunk with the host time (seconds) of its first
+    /// sample, on the capture queue. Set before `start()`.
+    nonisolated(unsafe) var onSamples: (@Sendable ([Float], Double) -> Void)?
+    /// Meeting recording streams to disk instead of keeping everything in memory.
+    nonisolated(unsafe) var keepsBuffer = true
+    /// Seconds to keep the session open after `stop()`. Dictation uses a short standby for fast
+    /// follow-ups; meeting recording releases the mic right away.
+    nonisolated(unsafe) var standbySeconds = AudioRecorder.standbySeconds
     /// Latest input level, 0...1, updated from the capture queue.
     var level: Float { levelStore.withLock { $0 } }
 
@@ -33,6 +41,8 @@ final class AudioRecorder: NSObject, @unchecked Sendable {
     private let preroll = Mutex<[Float]>([])
     private static let prerollSamples = 4_800
     private let captureQueue = DispatchQueue(label: "dev.mumble.capture", qos: .userInteractive)
+
+    nonisolated(unsafe) private var syncClock: CMClock?
 
     // Touched only from the main actor.
     private var session: AVCaptureSession?
@@ -70,7 +80,7 @@ final class AudioRecorder: NSObject, @unchecked Sendable {
         levelStore.withLock { $0 = 0 }
         standbyTask?.cancel()
         standbyTask = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(Self.standbySeconds))
+            try? await Task.sleep(for: .seconds(self?.standbySeconds ?? Self.standbySeconds))
             guard !Task.isCancelled else { return }
             self?.tearDown()
         }
@@ -118,6 +128,7 @@ final class AudioRecorder: NSObject, @unchecked Sendable {
         }
         // startRunning blocks until audio flows (~50–150 ms). Do it off the main thread; samples
         // that arrive after `capturing` is set are recorded.
+        syncClock = session.synchronizationClock
         captureQueue.async { session.startRunning() }
 
         self.session = session
@@ -164,7 +175,12 @@ extension AudioRecorder: AVCaptureAudioDataOutputSampleBufferDelegate {
             count: length / MemoryLayout<Float>.size)
 
         if capturing.load(ordering: .acquiring) {
-            buffer.append(samples)
+            if keepsBuffer { buffer.append(samples) }
+            if let onSamples {
+                let pts = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
+                let host = syncClock.map { CMSyncConvertTime(pts, from: $0, to: CMClockGetHostTimeClock()) } ?? pts
+                onSamples(Array(samples), host.seconds.isFinite ? host.seconds : SystemAudioTap.hostSecondsNow())
+            }
             let rms = AudioAnalysis.rms(Array(samples))
             levelStore.withLock { $0 = AudioAnalysis.meterLevel(rms: rms) }
         } else {

@@ -27,6 +27,10 @@ targets:
         product: MumbleCore
       - package: MumbleKit
         product: MumbleASR
+      - package: MumbleKit
+        product: MumbleStore
+      - package: MumbleKit
+        product: MumbleSummary
     info:
       path: Mumble/Info.plist
       properties:
@@ -35,7 +39,11 @@ targets:
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         LSUIElement: true
         LSApplicationCategoryType: public.app-category.productivity
-        NSMicrophoneUsageDescription: Mumble listens only while you hold the dictation key, and transcribes on this Mac.
+        NSMicrophoneUsageDescription: Mumble listens while you hold the dictation key or take meeting notes, and transcribes on this Mac.
+        NSAudioCaptureUsageDescription: Mumble records the meeting app's audio while you take meeting notes, so other people's words are transcribed. It stays on this Mac.
+        NSCalendarsFullAccessUsageDescription: Mumble reads your calendar to title meetings, suggest attendee names and remind you before calls. Nothing leaves this Mac.
+        NSCalendarsUsageDescription: Mumble reads your calendar to title meetings, suggest attendee names and remind you before calls. Nothing leaves this Mac.
+        NSScreenCaptureUsageDescription: Mumble can read the meeting window to identify who is speaking. Frames are never saved.
         NSHumanReadableCopyright: "© 2026 Puru Dahal. Licensed under AGPL-3.0."
     settings:
       base:

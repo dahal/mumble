@@ -37,10 +37,19 @@ public struct MeetingDocument: Sendable {
         return item.ownerSpeakerKey.map(name(forSpeaker:))
     }
 
+    /// Keys of voices marked "Not a person".
+    public var ignoredKeys: Set<String> { Set(speakers.filter(\.isIgnored).map(\.speakerKey)) }
+
+    /// Transcript without ignored voices, in time order.
+    public var visibleSegments: [Segment] {
+        let ignored = ignoredKeys
+        return segments.filter { !ignored.contains($0.speakerKey) }.sorted { $0.start < $1.start }
+    }
+
     /// Participants in order of first speech.
     public var participantNames: [String] {
         var seen: [String] = []
-        for segment in segments.sorted(by: { $0.start < $1.start }) {
+        for segment in visibleSegments {
             let name = name(forSpeaker: segment.speakerKey)
             if !seen.contains(name) { seen.append(name) }
         }
@@ -90,7 +99,7 @@ public enum MarkdownExporter {
                 out += "- \(timestamp(mark.time)) \(label)\(mark.text.map { ": \($0)" } ?? "")\n"
             }
         }
-        let segments = doc.segments.sorted { $0.start < $1.start }
+        let segments = doc.visibleSegments
         if !segments.isEmpty {
             out += "\n## Transcript\n"
             for segment in segments {

@@ -24,8 +24,11 @@ final class DictationController {
     var accessibilityTrusted = Permissions.isAccessibilityTrusted
 
     let island = IslandModel()
-    @ObservationIgnored private lazy var islandPanel = IslandPanel(model: island)
-    @ObservationIgnored private let engine = TranscriptionEngine()
+    @ObservationIgnored lazy var islandPanel = IslandPanel(model: island)
+    /// Shared with meeting notes: one model in memory, and every inference serialized on the ANE.
+    @ObservationIgnored let engine = TranscriptionEngine()
+    /// While meeting notes record, dictation can become a private note instead of being pasted.
+    @ObservationIgnored var privateNoteHandler: ((String) -> Bool)?
     @ObservationIgnored private let recorder = AudioRecorder()
     @ObservationIgnored private let hotkey = HotkeyMonitor()
     @ObservationIgnored private var gesture = HotkeyGesture()
@@ -267,6 +270,11 @@ final class DictationController {
             AppLog.info("Transcribed \(transcript.audioSeconds) s → \(text.count) chars; pre \(preMs) ms, engine \(transcript.processingMs) ms, engine call incl. queue \(asrWallMs) ms, sound \(soundMs) ms")
             guard !text.isEmpty else {
                 notify("Didn't catch any words.")
+                return
+            }
+            if privateNoteHandler?(text) == true {
+                island.phase = .done(text)
+                islandPanel.hide(after: .milliseconds(900))
                 return
             }
 

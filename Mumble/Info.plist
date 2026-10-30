@@ -24,9 +24,17 @@
 	<string>public.app-category.productivity</string>
 	<key>LSUIElement</key>
 	<true/>
+	<key>NSAudioCaptureUsageDescription</key>
+	<string>Mumble records the meeting app's audio while you take meeting notes, so other people's words are transcribed. It stays on this Mac.</string>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>Mumble reads your calendar to title meetings, suggest attendee names and remind you before calls. Nothing leaves this Mac.</string>
+	<key>NSCalendarsUsageDescription</key>
+	<string>Mumble reads your calendar to title meetings, suggest attendee names and remind you before calls. Nothing leaves this Mac.</string>
 	<key>NSHumanReadableCopyright</key>
 	<string>© 2026 Puru Dahal. Licensed under AGPL-3.0.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Mumble listens only while you hold the dictation key, and transcribes on this Mac.</string>
+	<string>Mumble listens while you hold the dictation key or take meeting notes, and transcribes on this Mac.</string>
+	<key>NSScreenCaptureUsageDescription</key>
+	<string>Mumble can read the meeting window to identify who is speaking. Frames are never saved.</string>
 </dict>
 </plist>

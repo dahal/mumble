@@ -416,3 +416,67 @@ struct SplitMix: RandomNumberGenerator {
         #expect(EchoGate.suppress(local: local, remote: []).cleaned == local)
     }
 }
+
+@Suite struct TimelineAlignerTests {
+    @Test func padsLateStartAndGaps() {
+        var a = TimelineAligner(startHostSeconds: 100, sampleRate: 1_000)
+        #expect(a.place([1, 1, 1], hostSeconds: 101).count == 1_003)   // started 1 s late
+        #expect(a.place([2, 2], hostSeconds: 101.003) == [2, 2])        // contiguous
+        let gap = a.place([3], hostSeconds: 102.005)                    // ~1 s pause
+        #expect(gap.count == 1_001 && gap.last == 3)
+        #expect(a.position == 2_006)
+    }
+
+    @Test func dropsOverlapWhenAhead() {
+        var a = TimelineAligner(startHostSeconds: 0, sampleRate: 1_000)
+        _ = a.place([Float](repeating: 1, count: 1_000), hostSeconds: 0)
+        let out = a.place([Float](repeating: 2, count: 1_000), hostSeconds: 0.5)  // 500 samples overlap
+        #expect(out.count == 500)
+        #expect(a.position == 1_500)
+    }
+
+    @Test func ignoresJitterAndPadsEnd() {
+        var a = TimelineAligner(startHostSeconds: 0, sampleRate: 16_000)
+        _ = a.place([Float](repeating: 0, count: 1_600), hostSeconds: 0)
+        #expect(a.place([1], hostSeconds: 0.1 + 0.005).count == 1)      // 80 samples late: within tolerance
+        #expect(a.padding(toSeconds: 1).count == 16_000 - 1_601)
+        #expect(a.padding(toSeconds: 0.5).isEmpty)
+    }
+
+    @Test func discardsAudioFromBeforeStart() {
+        var a = TimelineAligner(startHostSeconds: 10, sampleRate: 1_000)
+        #expect(a.place([1, 1], hostSeconds: 5).isEmpty)
+        #expect(a.position == 0)
+    }
+}
+
+@Suite struct MeetingPreferencesTests {
+    @Test func oldSettingsDecodeWithMeetingDefaults() throws {
+        let old = #"{"triggerKey":61,"model":"phonon2"}"#
+        let settings = try JSONDecoder().decode(MumbleSettings.self, from: Data(old.utf8))
+        #expect(settings.meetings == MeetingPreferences())
+        #expect(settings.meetings.remindOnDetect && !settings.meetings.catchTheStart && settings.meetings.rememberVoices == nil)
+        let partial = #"{"meetings":{"catchTheStart":true}}"#
+        let p = try JSONDecoder().decode(MumbleSettings.self, from: Data(partial.utf8))
+        #expect(p.meetings.catchTheStart && p.meetings.remindOnDetect)
+    }
+
+    @Test func headsUpNeedsCalendar() {
+        var p = MeetingPreferences()
+        #expect(!p.reminderOptions.headsUp)
+        p.useCalendar = true
+        #expect(p.reminderOptions.headsUp)
+    }
+}
+
+@Suite struct IgnoredSpeakerTests {
+    @Test func ignoredVoicesAreHiddenFromExport() {
+        var doc = MarkdownExporterTests.document()
+        let i = doc.speakers.firstIndex { $0.speakerKey == "S2" }!
+        doc.speakers[i].label = MeetingSpeaker.ignoredLabel
+        let md = MarkdownExporter.render(doc)
+        #expect(!md.contains("Sounds good."))
+        #expect(!md.contains("Speaker 3"))
+        #expect(doc.visibleSegments.count == 2)
+    }
+}
