@@ -20,7 +20,7 @@ struct MeetingSettingsSections: View {
     private var provider: SummaryProvider { SummaryProvider(rawValue: meetings.prefs.summaryProvider) ?? .automatic }
 
     var body: some View {
-        Section("Meetings") {
+        Section {
             LabeledContent("Start or stop meeting notes") {
                 Text(GlobalShortcuts.Shortcut.toggleMeeting.display)
                     .padding(.horizontal, 8).padding(.vertical, 2)
@@ -51,6 +51,10 @@ struct MeetingSettingsSections: View {
                 Text("Hold \(meetings.dictation.settings.triggerKey.displayName) to add a note only you see, instead of pasting.")
             }
             Toggle("Show live transcript in the island", isOn: binding(\.showLiveTranscript))
+        } header: {
+            Text("Meetings")
+        } footer: {
+            Text("Meeting notes are experimental. Speaker names and notes can be wrong, so check them before sharing.")
         }
 
         Section {

@@ -87,10 +87,14 @@ never transcript text. Crash reports, if any, are in `~/Library/Logs/DiagnosticR
   copy instead of a paste; history is kept locally and can be turned off.
 - **Model choice**: Phonon-2 (default), Parakeet Ultra (multilingual, most accurate), TDT v3/v2,
   and a light 110M model. See [Languages](#languages).
-- **Meeting notes**: who said what, by name, plus a summary and action items. See
-  [Meeting notes](#meeting-notes).
+- **Meeting notes** (experimental): who said what, by name, plus a summary and action items. See
+  [Meeting notes](#meeting-notes-experimental).
 
-## Meeting notes
+## Meeting notes (experimental)
+
+> [!NOTE]
+> Meeting notes are new and experimental. Speaker names and notes can be wrong, so check them before
+> sharing, and please [open an issue](https://github.com/dahal/mumble/issues) when something's off.
 
 Take notes on Google Meet, Zoom, Teams or Slack calls, with **who said what, by name**, and
 notes written for you. No bot joins the call and nothing leaves your Mac.

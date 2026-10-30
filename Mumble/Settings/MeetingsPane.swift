@@ -46,6 +46,9 @@ struct MeetingsPane: View {
 
     private var list: some View {
         List {
+            Label("Meeting notes are experimental. Speaker names and notes can be wrong, so check them before sharing.",
+                  systemImage: "flask")
+                .font(.callout).foregroundStyle(.secondary)
             if let error = meetings.storeError {
                 Label("Meeting notes are unavailable: \(error)", systemImage: "exclamationmark.triangle").foregroundStyle(.orange)
             }

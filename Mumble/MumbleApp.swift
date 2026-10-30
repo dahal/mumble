@@ -75,7 +75,7 @@ struct MenuContent: View {
                 Text("Hold \(controller.settings.triggerKey.displayName) to add a private note")
             }
         } else if meetings.askingTitle == nil {
-            Button("Start Meeting Notes") { meetings.toggle() }
+            Button("Start Meeting Notes (Experimental)") { meetings.toggle() }
                 .disabled(meetings.store == nil)
         }
         Button("Meetings…") { AppNavigation.shared.showMeeting(nil) }
