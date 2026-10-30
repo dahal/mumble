@@ -6,5 +6,8 @@
 	     microphone silently delivers no audio. -->
 	<key>com.apple.security.device.audio-input</key>
 	<true/>
+	<!-- Hardened runtime resource access for meeting notes: calendar attendees and titles. -->
+	<key>com.apple.security.personal-information.calendars</key>
+	<true/>
 </dict>
 </plist>

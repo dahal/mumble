@@ -99,6 +99,7 @@ public struct MumbleSettings: Codable, Sendable, Equatable {
     public var historyLimit = 200
     public var vocabulary: [VocabularyEntry] = []
     public var replacements: [Replacement] = []
+    public var meetings = MeetingPreferences()
 
     public init() {}
 
@@ -126,5 +127,6 @@ public struct MumbleSettings: Codable, Sendable, Equatable {
         historyLimit = try c.decodeIfPresent(Int.self, forKey: .historyLimit) ?? d.historyLimit
         vocabulary = try c.decodeIfPresent([VocabularyEntry].self, forKey: .vocabulary) ?? d.vocabulary
         replacements = try c.decodeIfPresent([Replacement].self, forKey: .replacements) ?? d.replacements
+        meetings = try c.decodeIfPresent(MeetingPreferences.self, forKey: .meetings) ?? d.meetings
     }
 }

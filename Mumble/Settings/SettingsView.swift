@@ -5,10 +5,12 @@ import SwiftUI
 
 struct SettingsView: View {
     let controller: DictationController
-    @State private var tab = Tab.general
+    let meetings: MeetingController
+    @Bindable private var navigation = AppNavigation.shared
 
     enum Tab: String, CaseIterable, Identifiable {
         case general = "General"
+        case meetings = "Meetings"
         case vocabulary = "Vocabulary"
         case replacements = "Replacements"
         case history = "History"
@@ -17,6 +19,7 @@ struct SettingsView: View {
         var icon: String {
             switch self {
             case .general: "gearshape"
+            case .meetings: "person.2.wave.2"
             case .vocabulary: "character.book.closed"
             case .replacements: "arrow.triangle.swap"
             case .history: "clock"
@@ -26,19 +29,20 @@ struct SettingsView: View {
 
     var body: some View {
         NavigationSplitView {
-            List(Tab.allCases, selection: $tab) { tab in
+            List(Tab.allCases, selection: Binding(get: { navigation.tab }, set: { if let t = $0 { navigation.tab = t } })) { tab in
                 Label(tab.rawValue, systemImage: tab.icon).tag(tab)
             }
             .navigationSplitViewColumnWidth(170)
         } detail: {
-            switch tab {
-            case .general: GeneralPane(controller: controller)
+            switch navigation.tab {
+            case .general: GeneralPane(controller: controller, meetings: meetings)
+            case .meetings: MeetingsPane(meetings: meetings)
             case .vocabulary: VocabularyPane(controller: controller)
             case .replacements: ReplacementsPane(controller: controller)
             case .history: HistoryPane(controller: controller)
             }
         }
-        .frame(minWidth: 640, minHeight: 500)
+        .frame(minWidth: 720, minHeight: 540)
     }
 }
 
@@ -46,6 +50,7 @@ struct SettingsView: View {
 
 struct GeneralPane: View {
     let controller: DictationController
+    let meetings: MeetingController
     @State private var micStatus = AudioRecorder.permission
     @State private var launchAtLogin = Permissions.launchesAtLogin
     @State private var inputDevices = AudioDevices.inputDevices()
@@ -58,7 +63,7 @@ struct GeneralPane: View {
         Form {
             Section("Setup") {
                 PermissionRow(
-                    title: "Microphone", detail: "Records only while you hold the key.",
+                    title: "Microphone", detail: "Records only while you dictate or take meeting notes.",
                     granted: micStatus == .authorized,
                     action: {
                         if micStatus == .notDetermined {
@@ -127,8 +132,12 @@ struct GeneralPane: View {
                     .onChange(of: launchAtLogin) { _, on in Permissions.launchesAtLogin = on }
             }
 
+            MeetingSettingsSections(meetings: meetings)
+
             Section {
-                Label("Everything runs on this Mac. Audio and text never leave it.", systemImage: "lock.shield")
+                Label(meetings.prefs.summaryProvider == "claude"
+                      ? "Everything runs on this Mac. Audio never leaves it; meeting transcripts go to Claude only for summaries, as you chose."
+                      : "Everything runs on this Mac. Audio and text never leave it.", systemImage: "lock.shield")
                     .foregroundStyle(.secondary)
                 if let ms = controller.lastLatencyMs {
                     Text("Last dictation: \(ms) ms from release to text.").foregroundStyle(.secondary)

@@ -23,6 +23,7 @@ final class IslandPanel {
         let notch = Self.notchSize(of: screen)
         panel.contentView = NSHostingView(
             rootView: IslandView(model: model, notch: notch ?? CGSize(width: 180, height: 32), hasNotch: notch != nil))
+        panel.ignoresMouseEvents = !model.phase.isInteractive
         let frame = screen.frame
         panel.setFrame(
             NSRect(
@@ -40,6 +41,12 @@ final class IslandPanel {
         hideTask = Task { [weak self] in
             if delay > .zero { try? await Task.sleep(for: delay) }
             guard !Task.isCancelled, let self else { return }
+            // During a meeting the island returns to the meeting state instead of hiding.
+            if let resting = self.model.restingPhase {
+                self.model.phase = resting
+                self.panel?.ignoresMouseEvents = !resting.isInteractive
+                return
+            }
             self.model.phase = .hidden
             try? await Task.sleep(for: .milliseconds(450))
             guard !Task.isCancelled else { return }

@@ -24,6 +24,14 @@ enum DevTools {
             Task { await E2ETest.run(controller, resultURL: URL(fileURLWithPath: args[i + 1]), arguments: args) }
             return true
         }
+        if let i = args.firstIndex(of: "--e2e-meeting"), i + 1 < args.count {
+            Task { await MeetingE2ETest.run(controller, resultURL: URL(fileURLWithPath: args[i + 1])) }
+            return true
+        }
+        if let i = args.firstIndex(of: "--render-meetings"), i + 1 < args.count {
+            Task { await RenderMeetings.run(controller, to: URL(fileURLWithPath: args[i + 1])) }
+            return true
+        }
         if args.contains("--record-test") {
             Task { await recordTest() }
             return true
@@ -45,6 +53,9 @@ enum DevTools {
             ("finishing", .finishing, "Let's grab coffee at nine thirty and go over the roadmap", false),
             ("done", .done("Let's grab coffee at nine thirty and go over the roadmap."), "", false),
             ("notice", .notice("Secure field — copied to clipboard instead"), "", false),
+            ("meeting", .meeting, "…or just the savings badge? I'd rather not clutter the card.", false),
+            ("suggest", .suggest(title: "Pricing page rollout", appBundleID: "com.google.Chrome"), "", false),
+            ("heads-up", .headsUp(title: "Pricing page rollout"), "", false),
         ]
         // Menu bar icons at 4×, on light and dark menu bar backgrounds.
         for (name, icon) in [("menubar-idle", MenuBarIcon.idle), ("menubar-recording", MenuBarIcon.recording)] {
@@ -72,6 +83,8 @@ enum DevTools {
                 model.isLatched = latched
                 model.elapsed = 4.2
                 model.levels = (0..<14).map { Float(0.25 + 0.6 * abs(sin(Double($0) * 0.7))) }
+                model.meetingSpeaker = "Sarah Chen"
+                if phase == .meeting { model.elapsed = 768 }
                 let view = IslandView(model: model, notch: CGSize(width: 185, height: 32), hasNotch: hasNotch)
                     .frame(width: 520, height: 180)
                     .background(Color(white: 0.85))

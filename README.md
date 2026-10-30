@@ -87,6 +87,41 @@ never transcript text. Crash reports, if any, are in `~/Library/Logs/DiagnosticR
   copy instead of a paste; history is kept locally and can be turned off.
 - **Model choice**: Phonon-2 (default), Parakeet Ultra (multilingual, most accurate), TDT v3/v2,
   and a light 110M model. See [Languages](#languages).
+- **Meeting notes** (experimental): who said what, by name, plus a summary and action items. See
+  [Meeting notes](#meeting-notes-experimental).
+
+## Meeting notes (experimental)
+
+> [!NOTE]
+> Meeting notes are new and experimental. Speaker names and notes can be wrong, so check them before
+> sharing, and please [open an issue](https://github.com/dahal/mumble/issues) when something's off.
+
+Take notes on Google Meet, Zoom, Teams or Slack calls, with **who said what, by name**, and
+notes written for you. No bot joins the call and nothing leaves your Mac.
+
+- **Start**: press **⌥⇧M**, choose *Start Meeting Notes* in the menu bar, or click **Take Notes**
+  when Mumble notices a call starting (an island prompt and a notification). An optional
+  heads-up appears 1 minute before calendar meetings.
+- **Two clean tracks**: your microphone is always *you*; the meeting app's own audio (a Core Audio
+  process tap, macOS 14.4+) is everyone else. Speaker echo from laptop speakers is removed so it
+  isn't transcribed twice.
+- **Who said what**: the others are separated by speaker diarization (FluidAudio, on the Neural
+  Engine). Name a voice once with **Choose name…**; with *Remember voices* on, Mumble recognizes
+  that person automatically next time. Calendar invites (from the calendars on your Mac, no
+  Google sign-in) suggest names; live captions can be read too (experimental).
+- **Notes**: summary, decisions, action items with owners and open questions. They're written on
+  your Mac with Apple Intelligence when it's on, otherwise by Mumble's built-in extractor. Claude is
+  an opt-in alternative (your API key; only transcript text is sent, never audio).
+- **During the call**: the island shows the live transcript and who's talking; **⌥⇧B** bookmarks the
+  moment; optionally, dictation becomes a private note instead of pasting.
+- **Afterwards**: search every meeting, check off action items, copy as Markdown, or keep a
+  Markdown copy in a folder you choose (e.g. an Obsidian vault). Notes are stored in a local SQLite
+  database; meeting audio is deleted after processing unless you choose to keep it.
+- **Permissions** are asked only when needed: System Audio Recording (other people's audio),
+  Calendars (optional), Screen Recording (optional, to read names from the meeting window).
+
+Recording-consent laws differ by place; Mumble offers a one-click message to tell everyone you're
+taking notes. Details: [`docs/specs/meeting-notes.md`](docs/specs/meeting-notes.md).
 
 ## Languages
 
@@ -248,6 +283,20 @@ reads the file back. Before every synthetic key press it verifies VS Code with t
 frontmost, and it only allows pastes into VS Code, so it can never type into another app.
 Scenarios: hold ×3 back to back, double-tap latch, Esc cancel, ~30 s dictation, cold mic start.
 It also records the output device's sample rate to prove Bluetooth audio isn't degraded.
+
+Meeting notes end to end (plays synthetic voices aloud for ~3 minutes; uses a temporary database
+and restores your settings; types nothing):
+
+```sh
+open -n -W build/Mumble.app --args --e2e-meeting /tmp/e2e-meeting.txt
+cat /tmp/e2e-meeting.txt
+```
+
+Two participants play from an `afplay` process that Mumble records with a real process tap; "you"
+play through the built-in speakers so the real microphone hears you (and the echo of the
+others). It checks the transcript, speaker separation, echo removal, notes and owners,
+bookmarks, naming, automatic recognition from saved voices in a second meeting, search, the
+Markdown copy, catch-the-start and Not Now.
 
 ## Measured (M2 Max, Phonon-2)
 

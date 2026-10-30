@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 /// The black pill that grows out of the notch. On screens without a notch it floats
@@ -15,14 +16,22 @@ struct IslandView: View {
         case .listening: model.showPreview && !model.previewText.isEmpty
         case .finishing: model.showPreview && !model.previewText.isEmpty
         case .done, .notice: true
-        case .hidden: false
+        case .meeting: model.showPreview && !model.previewText.isEmpty
+        case .hidden, .suggest, .headsUp: false
         }
+    }
+
+    private var isPrompt: Bool {
+        if case .suggest = model.phase { return true }
+        if case .headsUp = model.phase { return true }
+        return false
     }
 
     private var size: CGSize {
         guard expanded else { return hasNotch ? notch : CGSize(width: 120, height: 0) }
-        let width: CGFloat = showsText ? 440 : max(notch.width + 120, 260)
         let topInset = hasNotch ? notch.height : 0
+        if isPrompt { return CGSize(width: 480, height: topInset + 44) }
+        let width: CGFloat = showsText ? 440 : max(notch.width + 120, 260)
         return CGSize(width: width, height: topInset + (showsText ? 84 : 40))
     }
 
@@ -55,6 +64,21 @@ struct IslandView: View {
     }
 
     @ViewBuilder private var content: some View {
+        switch model.phase {
+        case let .suggest(title, bundleID):
+            PromptRow(icon: AnyView(AppIconView(bundleID: bundleID)), title: title, detail: "Take notes?",
+                      button: "Take Notes", shortcut: nil, showsDismiss: true,
+                      onTake: model.onTakeNotes, onDismiss: model.onDismiss)
+        case let .headsUp(title):
+            PromptRow(icon: AnyView(Image(systemName: "calendar").font(.system(size: 16, weight: .medium)).foregroundStyle(.white)),
+                      title: title, detail: "in 1 min", button: "Take Notes", shortcut: "⌥⇧M", showsDismiss: false,
+                      onTake: model.onTakeNotes, onDismiss: model.onDismiss)
+        default:
+            statusContent
+        }
+    }
+
+    @ViewBuilder private var statusContent: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 10) {
                 leadingIcon
@@ -62,7 +86,15 @@ struct IslandView: View {
                 trailingStatus
             }
             .frame(height: 40)
-            if showsText {
+            if showsText, case .meeting = model.phase {
+                (Text(model.meetingSpeaker.isEmpty ? "" : model.meetingSpeaker + "  ").foregroundStyle(.white)
+                    + Text(model.previewText).foregroundStyle(.white.opacity(0.65)))
+                    .font(.system(size: 13, weight: .medium))
+                    .lineLimit(2)
+                    .truncationMode(.head)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentTransition(.opacity)
+            } else if showsText {
                 Text(displayText)
                     .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(textStyle)
@@ -92,7 +124,7 @@ struct IslandView: View {
 
     @ViewBuilder private var leadingIcon: some View {
         switch model.phase {
-        case .listening:
+        case .listening, .meeting:
             WaveformBars(levels: model.levels)
         case .finishing:
             Image(systemName: "waveform")
@@ -108,7 +140,7 @@ struct IslandView: View {
             Image(systemName: "exclamationmark.triangle.fill")
                 .foregroundStyle(.orange)
                 .font(.system(size: 16, weight: .semibold))
-        case .hidden:
+        case .hidden, .suggest, .headsUp:
             EmptyView()
         }
     }
@@ -126,6 +158,17 @@ struct IslandView: View {
                     .font(.system(size: 12, weight: .medium).monospacedDigit())
                     .foregroundStyle(.white.opacity(0.8))
             }
+        case .meeting:
+            HStack(spacing: 6) {
+                Text(model.flash ?? "Meeting notes")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(model.flash == nil ? .white.opacity(0.6) : .orange)
+                    .contentTransition(.opacity)
+                Circle().fill(.red).frame(width: 7, height: 7)
+                Text(Self.format(model.elapsed))
+                    .font(.system(size: 12, weight: .medium).monospacedDigit())
+                    .foregroundStyle(.white.opacity(0.8))
+            }
         case .done:
             Text("Inserted").font(.system(size: 12, weight: .medium)).foregroundStyle(.white.opacity(0.6))
         default:
@@ -136,6 +179,62 @@ struct IslandView: View {
     static func format(_ seconds: Double) -> String {
         let s = Int(seconds)
         return String(format: "%d:%02d", s / 60, s % 60)
+    }
+}
+
+/// One-row prompt in the island: icon, title, detail, a white capsule button and an optional ×.
+struct PromptRow: View {
+    let icon: AnyView
+    let title: String
+    let detail: String
+    let button: String
+    let shortcut: String?
+    let showsDismiss: Bool
+    let onTake: () -> Void
+    let onDismiss: () -> Void
+
+    var body: some View {
+        HStack(spacing: 10) {
+            icon.frame(width: 22, height: 22)
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text(title).font(.system(size: 13, weight: .semibold)).foregroundStyle(.white).lineLimit(1)
+                Text(detail).font(.system(size: 13, weight: .medium)).foregroundStyle(.white.opacity(0.6)).lineLimit(1)
+            }
+            Spacer(minLength: 8)
+            Button(action: onTake) {
+                HStack(spacing: 6) {
+                    Text(button).font(.system(size: 12, weight: .semibold)).foregroundStyle(.black)
+                    if let shortcut { Text(shortcut).font(.system(size: 12, weight: .medium)).foregroundStyle(.gray) }
+                }
+                .padding(.horizontal, 12)
+                .frame(height: 26)
+                .background(Capsule().fill(.white))
+            }
+            .buttonStyle(.plain)
+            if showsDismiss {
+                Button(action: onDismiss) {
+                    Image(systemName: "xmark").font(.system(size: 9, weight: .bold)).foregroundStyle(.white)
+                        .frame(width: 22, height: 22)
+                        .background(Circle().fill(.white.opacity(0.14)))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Not now")
+            }
+        }
+        .frame(height: 44)
+    }
+}
+
+/// The meeting app's icon on a small white tile.
+struct AppIconView: View {
+    let bundleID: String?
+
+    var body: some View {
+        if let bundleID, let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) {
+            Image(nsImage: NSWorkspace.shared.icon(forFile: url.path)).resizable().interpolation(.high)
+        } else {
+            Image(systemName: "video.fill").font(.system(size: 13)).foregroundStyle(.white)
+        }
     }
 }
 
