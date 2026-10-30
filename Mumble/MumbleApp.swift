@@ -20,6 +20,8 @@ struct MumbleApp: App {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     static let controller = DictationController()
     static let meetings = MeetingController(dictation: controller)
+    /// Dev tools show the window with a different (temporary) store.
+    static var meetingsOverride: MeetingController?
     private static var settingsWindow: NSWindow?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -43,7 +45,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 backing: .buffered, defer: false)
             window.title = "Mumble"
             window.isReleasedWhenClosed = false
-            window.contentView = NSHostingView(rootView: SettingsView(controller: controller, meetings: meetings))
+            window.contentView = NSHostingView(rootView: SettingsView(controller: controller, meetings: meetingsOverride ?? meetings))
             window.center()
             settingsWindow = window
         }

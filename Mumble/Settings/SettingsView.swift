@@ -63,7 +63,7 @@ struct GeneralPane: View {
         Form {
             Section("Setup") {
                 PermissionRow(
-                    title: "Microphone", detail: "Records only while you hold the key.",
+                    title: "Microphone", detail: "Records only while you dictate or take meeting notes.",
                     granted: micStatus == .authorized,
                     action: {
                         if micStatus == .notDetermined {

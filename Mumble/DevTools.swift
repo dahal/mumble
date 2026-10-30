@@ -28,6 +28,10 @@ enum DevTools {
             Task { await MeetingE2ETest.run(controller, resultURL: URL(fileURLWithPath: args[i + 1])) }
             return true
         }
+        if let i = args.firstIndex(of: "--render-meetings"), i + 1 < args.count {
+            Task { await RenderMeetings.run(controller, to: URL(fileURLWithPath: args[i + 1])) }
+            return true
+        }
         if args.contains("--record-test") {
             Task { await recordTest() }
             return true
