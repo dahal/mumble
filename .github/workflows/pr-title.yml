@@ -1,0 +1,33 @@
+name: PR title
+
+# Squash merges use the PR title as the commit message on main, and the release workflow reads it
+# to pick the next version. This check keeps titles in Conventional Commits form:
+#   fix: …   feat: …   feat(audio): …   feat!: …   chore: …   docs: …
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+permissions: {}
+
+jobs:
+  conventional-title:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check PR title
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          # Regexes live in variables: written inline in [[ =~ ]], bash mangles the \( escapes.
+          types="feat|fix|perf|refactor|docs|test|build|ci|chore|style|revert"
+          valid="^($types)(\([a-z0-9._/-]+\))?(!)?: .+"
+          if [[ "$TITLE" =~ $valid ]]; then
+            type="${BASH_REMATCH[1]}"
+            if [[ -n "${BASH_REMATCH[3]}" ]]; then bump="major (minor before 1.0)";
+            elif [[ "$type" == "feat" ]]; then bump="minor"; else bump="patch"; fi
+            echo "✅ \"$TITLE\" → $bump release when merged (if it changes the app)"
+          else
+            echo "::error::PR title must look like \"type: description\", where type is one of: ${types//|/, }."
+            echo "Examples: \"fix: paste fails in Terminal\", \"feat(audio): Apple Speech fallback\", \"feat!: new settings format\"."
+            echo "The title becomes the commit message on main and decides the next version."
+            exit 1
+          fi
