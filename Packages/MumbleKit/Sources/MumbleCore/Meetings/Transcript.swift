@@ -139,6 +139,39 @@ public enum EchoGate {
         return best >= threshold
     }
 
+    /// Silences microphone frames that are only the meeting playing through the speakers.
+    ///
+    /// Estimates the speaker→mic gain from frames where the meeting audio is active (you're usually
+    /// quiet then), and mutes local frames no louder than that echo level (with a margin). You talking
+    /// over someone stays: your voice is much louder than the echo. Returns the cleaned track and the
+    /// seconds removed.
+    public static func suppress(
+        local: [Float], remote: [Float], frame: Int = 480, maxLagFrames: Int = 10, margin: Float = 3
+    ) -> (cleaned: [Float], removedSeconds: Double) {
+        guard !remote.isEmpty, local.count >= frame else { return (local, 0) }
+        let localEnv = envelope(local, frame: frame)
+        let remoteEnv = envelope(remote, frame: frame)
+        guard !remoteEnv.isEmpty else { return (local, 0) }
+        // The mic hears the speakers slightly later: compare with the loudest recent remote frame.
+        let remoteRecent: [Float] = localEnv.indices.map { i in
+            let lo = max(0, i - maxLagFrames), hi = min(remoteEnv.count - 1, i)
+            return lo <= hi ? remoteEnv[lo...hi].max() ?? 0 : 0
+        }
+        let active = localEnv.indices.filter { remoteRecent[$0] > 0.003 }
+        guard active.count > 10 else { return (local, 0) }
+        let ratios = active.map { localEnv[$0] / remoteRecent[$0] }.sorted()
+        let gain = ratios[ratios.count / 2]
+
+        var cleaned = local
+        var removed = 0
+        for i in active where localEnv[i] <= gain * remoteRecent[i] * margin {
+            let start = i * frame
+            for j in start..<min(start + frame, cleaned.count) { cleaned[j] = 0 }
+            removed += 1
+        }
+        return (cleaned, Double(removed * frame) / Double(AudioAnalysis.sampleRate))
+    }
+
     static func envelope(_ samples: [Float], frame: Int) -> [Float] {
         stride(from: 0, to: samples.count - frame + 1, by: frame).map { i in
             var sum: Float = 0

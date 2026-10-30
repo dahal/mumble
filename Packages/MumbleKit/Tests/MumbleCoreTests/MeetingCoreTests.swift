@@ -361,3 +361,58 @@ struct SplitMix: RandomNumberGenerator {
         #expect(ring.count == 0 && ring.isZeroed && ring.snapshot().isEmpty)
     }
 }
+
+@Suite struct SpeechRegionTests {
+    /// 1 s silence, 2 s speech-like noise, 3 s silence, 20 s speech, 1 s silence.
+    static func track() -> [Float] {
+        var rng = SplitMix(seed: 5)
+        func noise(_ s: Double, _ amp: Float) -> [Float] { (0..<Int(s * 16_000)).map { _ in Float.random(in: -amp...amp, using: &rng) } }
+        return noise(1, 0.001) + noise(2, 0.2) + noise(3, 0.001) + noise(20, 0.2) + noise(1, 0.001)
+    }
+
+    @Test func findsSpeechAndCapsLength() {
+        let regions = SpeechRegions.detect(Self.track())
+        #expect(regions.count >= 3)
+        guard let first = regions.first else { return }
+        #expect(abs(Double(first.lowerBound) / 16_000 - 1) < 0.3)
+        #expect(abs(Double(first.upperBound) / 16_000 - 3) < 0.6)
+        #expect(regions.allSatisfy { Double($0.count) / 16_000 <= 14.01 })
+        let total = regions.dropFirst().reduce(0) { $0 + $1.count }
+        #expect(abs(Double(total) / 16_000 - 20) < 1)
+    }
+
+    @Test func silenceHasNoRegions() {
+        #expect(SpeechRegions.detect([Float](repeating: 0, count: 64_000)).isEmpty)
+    }
+
+    @Test func voiceMatchingPicksNearestPerson() {
+        let a = UUID(), b = UUID()
+        let voices = [Voice(personID: a, embedding: [1, 0, 0], model: "m"), Voice(personID: a, embedding: [0.9, 0.1, 0], model: "m"),
+                      Voice(personID: b, embedding: [0, 1, 0], model: "m")]
+        let matches = VoiceMatching.bestMatches(clusters: ["S1": [0.95, 0.05, 0], "S2": [0, 0.9, 0.1]], voices: voices)
+        #expect(matches["S1"]?.personID == a)
+        #expect(matches["S2"]?.personID == b)
+        #expect(VoiceMatching.cosineDistance([1, 0], [1, 0]) < 1e-6)
+        #expect(VoiceMatching.cosineDistance([1, 0], [0, 1]) == 1)
+        #expect(VoiceMatching.cosineDistance([1], [1, 2]) == 2)
+    }
+}
+
+@Suite struct EchoSuppressionTests {
+    @Test func mutesEchoKeepsYourVoice() {
+        // Remote talks 0–2 s; you talk 2–4 s; the mic hears the remote at 25 % with a 30 ms delay.
+        let remote = EchoGateTests.bursts(seconds: 2, seed: 1) + [Float](repeating: 0, count: 32_000)
+        let mine = [Float](repeating: 0, count: 32_000) + EchoGateTests.bursts(seconds: 2, seed: 2)
+        var local = mine
+        for i in 480..<local.count { local[i] += remote[i - 480] * 0.25 }
+        let (cleaned, removed) = EchoGate.suppress(local: local, remote: remote)
+        #expect(removed > 0.8)
+        #expect(AudioAnalysis.rms(Array(cleaned[0..<32_000])) < AudioAnalysis.rms(Array(local[0..<32_000])) * 0.5)
+        #expect(Array(cleaned[37_000..<64_000]) == Array(local[37_000..<64_000]), "your speech was changed")
+    }
+
+    @Test func noRemoteMeansNoChange() {
+        let local = EchoGateTests.bursts(seconds: 1, seed: 3)
+        #expect(EchoGate.suppress(local: local, remote: []).cleaned == local)
+    }
+}
