@@ -13,6 +13,11 @@ final class MeetingDetector {
         var url: String?
         var appName: String
         var pid: pid_t
+
+        /// What to record: the app and its helpers, or this exact process.
+        var tapTarget: SystemAudioTap.Target {
+            bundlePrefixes.isEmpty ? .pids([pid]) : .bundlePrefixes(bundlePrefixes)
+        }
     }
 
     var onStart: (Call) -> Void = { _ in }

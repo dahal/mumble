@@ -387,7 +387,7 @@ All signals become `NameSignal(time: Double, name: String, source:)` in a `Signa
    a suggestion (dotted check) the user can confirm.
 7. Everything else stays "Speaker N" for **Choose name…**.
 8. **Learning.** When a cluster is assigned by captions, screen, or the user, and "Remember voices" is on, add its
-   embedding to that person's `VoiceProfile` (only for clusters with ≥ 20 s of clean speech).
+   embedding to that person's `VoiceProfile` (only for clusters with ≥ 8 s of speech).
 
 User corrections always win and are never overwritten by later reprocessing.
 
@@ -740,3 +740,34 @@ bump the minor version automatically.
 2. Is macOS 26 acceptable for summaries, with macOS 15 users getting transcripts only (unless they choose Local or
    Claude)?
 3. Should private notes ever be included in exports by default?
+
+## 19. Implementation status (v1)
+
+Built and tested (unit, real-model integration, and the acoustic `--e2e-meeting` test):
+
+| Area | Status |
+|---|---|
+| Two-track capture: microphone + Core Audio process tap, host-time alignment, helper-process refresh | ✅ |
+| Echo removal (frame-level suppression; replaces the region-level gate in §6.3) | ✅ |
+| Offline diarization, per-turn transcription, merge | ✅ |
+| Speaker naming: saved voices, captions alignment, invite single-candidate, Choose name…, ignore | ✅ (captions: experimental) |
+| Reminders R1–R5: detection, island prompt, notification actions, heads-up, catch-the-start, rules | ✅ |
+| Summaries: Apple Intelligence (map-reduce, guided generation), Claude (opt-in), built-in extractor | ✅ |
+| SQLite store (GRDB), FTS5 search, Markdown copy, retention, resume after quit | ✅ |
+| Meetings list/detail, settings sections, voices sheet, menu, island states (Paper designs) | ✅ |
+
+Deliberate differences from the plan above:
+
+- **Word timings** (`segments.words`) are not stored: each segment is one diarized speaker turn, which is
+  enough for naming, search and playback. The column was dropped from schema v1.
+- **Crash recovery** (§12.7) uses the audio, not live transcript rows: both tracks are written to disk
+  continuously, and an interrupted recording is processed on next launch.
+- **Speaking-highlight voting** (§10.2) is not shipped: detecting each app's highlight needs tuning
+  against real calls. Reading the meeting window (opt-in) instead collects participant names as
+  suggestions for Choose name…; it never decides who is talking.
+- **Captions** are read through Accessibility generically (a region labeled "Captions"); spike S5
+  (which apps expose them) is still open, so the setting is labeled experimental.
+- **Local MLX summarizer** (M5) is not built. When Apple Intelligence is unavailable, the built-in
+  rule-based extractor writes the notes, so every meeting gets notes on every Mac.
+- **Summary provider** gained an *Automatic* default: Apple Intelligence when available, otherwise
+  built-in. Any summarizer failure falls back to the built-in extractor.

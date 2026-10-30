@@ -37,6 +37,8 @@ final class SystemAudioTap: @unchecked Sendable {
     private var aggregateID = AudioObjectID(kAudioObjectUnknown)
     private var procID: AudioDeviceIOProcID?
     private var tappedProcesses: [AudioObjectID] = []
+    /// The output device the aggregate was built on; the tap follows the system output when it changes.
+    private var outputUID: String?
     private let queue = DispatchQueue(label: "dev.mumble.tap", qos: .userInitiated)
     private var converter: AVAudioConverter?
     private var inputFormat: AVAudioFormat?
@@ -122,6 +124,7 @@ final class SystemAudioTap: @unchecked Sendable {
         converter = AVAudioConverter(from: input, to: outputFormat)
 
         let outputUID = try Self.defaultOutputUID()
+        self.outputUID = outputUID
         let aggregate: [String: Any] = [
             kAudioAggregateDeviceNameKey: "Mumble Meeting Tap",
             kAudioAggregateDeviceUIDKey: UUID().uuidString,
@@ -166,6 +169,12 @@ final class SystemAudioTap: @unchecked Sendable {
     /// audio helper). Returns true when it restarted.
     @discardableResult
     func refreshIfNeeded() -> Bool {
+        // Headphones connected or disconnected: rebuild on the new output device.
+        if let outputUID, let current = try? Self.defaultOutputUID(), current != outputUID {
+            AppLog.info("Meeting tap: output device changed, restarting")
+            do { try start() } catch { AppLog.error("Meeting tap restart failed: \(error)") }
+            return true
+        }
         guard target != .everythingButMumble else { return false }
         let now = matchingProcesses()
         guard !now.isEmpty, Set(now) != Set(tappedProcesses) else { return false }

@@ -41,8 +41,12 @@ final class MeetingController {
     @ObservationIgnored private var consent: ConsentPanel?
     @ObservationIgnored private var headsUpHide: Task<Void, Never>?
 
+    /// Tests point this at a temporary folder.
+    static var meetingsFolderOverride: URL?
+
     static var meetingsFolder: URL {
-        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appending(path: "Mumble/Meetings")
+        meetingsFolderOverride
+            ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appending(path: "Mumble/Meetings")
     }
 
     static func folder(for id: UUID) -> URL { meetingsFolder.appending(path: id.uuidString) }
@@ -106,7 +110,7 @@ final class MeetingController {
         return .init(app: call.app, url: call.url ?? event?.url, title: title, seriesID: event?.seriesID)
     }
 
-    private func callStarted(_ call: MeetingDetector.Call) {
+    func callStarted(_ call: MeetingDetector.Call) {
         guard !isRecording else { return }
         let detected = detected(for: call)
         let rules = (try? store?.rules()) ?? []
@@ -137,8 +141,7 @@ final class MeetingController {
             let id = UUID()
             let recorder = MeetingRecorder(folder: Self.folder(for: id))
             do {
-                try recorder.start(inputUID: dictation.settings.inputDeviceUID,
-                                   tapTarget: .bundlePrefixes(call.bundlePrefixes), hold: true)
+                try recorder.start(inputUID: dictation.settings.inputDeviceUID, tapTarget: call.tapTarget, hold: true)
                 self.recorder = recorder
             } catch {
                 AppLog.error("Catch-the-start hold failed: \(error)")
@@ -265,7 +268,7 @@ final class MeetingController {
         } else {
             self.recorder?.discard()
             recorder = MeetingRecorder(folder: Self.folder(for: meeting.id))
-            let target: SystemAudioTap.Target = call.map { .bundlePrefixes($0.bundlePrefixes) } ?? .everythingButMumble
+            let target: SystemAudioTap.Target = call?.tapTarget ?? .everythingButMumble
             do {
                 try recorder.start(inputUID: dictation.settings.inputDeviceUID, tapTarget: target, hold: false)
             } catch {
@@ -626,10 +629,13 @@ final class MeetingController {
         if prefs.rememberVoices != true { try store.clearSpeakerEmbeddings(id) }
     }
 
+    /// Speech needed before a voice is saved; diarizer embeddings are stable well before this.
+    static let minVoiceSeconds = 8.0
+
     private func learnVoice(meetingID: UUID, speakerKey: String, personID: UUID) {
         guard prefs.rememberVoices == true, let store,
               let speaker = try? store.speakers(meetingID).first(where: { $0.speakerKey == speakerKey }),
-              let embedding = speaker.embedding, speaker.talkSeconds >= 20
+              let embedding = speaker.embedding, speaker.talkSeconds >= Self.minVoiceSeconds
         else { return }
         try? store.addVoice(Voice(personID: personID, embedding: embedding, model: MeetingDiarizer.embeddingModelID,
                                   sourceMeetingID: meetingID))

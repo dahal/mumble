@@ -85,9 +85,10 @@ final class MeetingRecorder: @unchecked Sendable {
 
         if let tapTarget { startTap(tapTarget) }
         refreshTask = Task { [weak self] in
-            // Meeting apps start new audio helper processes mid-call; follow them.
+            // Meeting apps start new audio helper processes mid-call, and the output device can
+            // change (headphones); follow both. Cheap: one process-list query per second.
             while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(5))
+                try? await Task.sleep(for: .seconds(1))
                 guard let self, let tap = self.tap else { continue }
                 if !tap.isRunning, let target = Optional(tap.target) { self.startTap(target) } else { tap.refreshIfNeeded() }
             }
