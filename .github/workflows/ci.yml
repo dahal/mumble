@@ -32,6 +32,9 @@ jobs:
           key: spm-${{ runner.os }}-${{ hashFiles('Packages/MumbleKit/Package.resolved') }}
           restore-keys: spm-${{ runner.os }}-
 
+      - name: Release versioning tests
+        run: scripts/test-next-version.sh
+
       - name: Unit tests
         working-directory: Packages/MumbleKit
         # Model integration tests (MUMBLE_INTEGRATION=1) download ~330 MB; they run locally.

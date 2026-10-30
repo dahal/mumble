@@ -90,16 +90,33 @@ never transcript text. Crash reports, if any, are in `~/Library/Logs/DiagnosticR
 
 ## Releasing
 
-Releases are built by GitHub Actions (`.github/workflows/release.yml`):
+Releases are automatic. **Every pull request merged into `main` that changes the app publishes a
+new version.** There's nothing to tag by hand.
 
-```sh
-git tag v0.2.0 && git push origin v0.2.0      # v0.3.0-beta.1 → pre-release
-```
+Versions follow [Semantic Versioning](https://semver.org), decided by the PR title (PRs are
+squash-merged, so the title becomes the commit message on `main`). A check on every PR enforces
+[Conventional Commits](https://www.conventionalcommits.org) titles:
 
-The workflow runs the unit tests, builds with the tag's version, signs, packages
+| PR title | Release |
+|---|---|
+| `fix: paste fails in Terminal` (also `perf:`, `refactor:`, `chore:` …) | patch: 0.1.1 → 0.1.2 |
+| `feat: Apple Speech fallback` / `feat(audio): …` | minor: 0.1.1 → 0.2.0 |
+| `feat!: new settings format` (`!` = breaking) | major; minor while below 1.0 |
+
+- Merges that only touch docs, design files or CI don't release. Add `[skip release]` to a PR
+  title to skip one.
+- Manual releases still work: run **Release** from the Actions tab (choose patch/minor/major or an
+  exact version), or push a tag yourself (`git tag v1.2.0 && git push origin v1.2.0`). A suffix
+  like `v1.3.0-beta.1` publishes a pre-release, which the installer ignores.
+- `scripts/next-version.sh` prints the version the next release would get;
+  `scripts/test-next-version.sh` tests it.
+
+Each release runs the unit tests, builds with the new version, signs, packages
 `Mumble-<version>.dmg`, `Mumble-<version>.zip`, `Mumble.zip` and `SHA256SUMS.txt`, and publishes a
-GitHub release with install instructions. It can also be started from the Actions tab.
+GitHub release with the tag, install instructions and the list of merged PRs.
 `.github/workflows/ci.yml` runs the tests and a build on every push and pull request.
+
+Repository settings this relies on: squash merging only, with the PR title as the commit message.
 
 Signing, via repository secrets:
 
@@ -126,6 +143,7 @@ scripts/build.sh             builds and signs build/Mumble.app (MUMBLE_VERSION, 
 scripts/sign.sh              Developer ID or stable self-signed signing, hardened runtime
 scripts/package.sh           dmg + zip + checksums in build/dist (notarizes when configured)
 scripts/install.sh           the curl | bash installer users run
+scripts/next-version.sh      next SemVer version from commit messages (+ test-next-version.sh)
 .github/workflows/           CI and release
 scripts/make-icon.sh         updates Mumble/AppIcon.icon (Icon Composer) from artwork
 project.yml                  XcodeGen project definition
