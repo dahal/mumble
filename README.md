@@ -86,7 +86,68 @@ never transcript text. Crash reports, if any, are in `~/Library/Logs/DiagnosticR
 - **Never loses text**: the clipboard is restored after pasting; secure (password) fields get a
   copy instead of a paste; history is kept locally and can be turned off.
 - **Model choice**: Phonon-2 (default), Parakeet Ultra (multilingual, most accurate), TDT v3/v2,
-  and a light 110M model.
+  and a light 110M model. See [Languages](#languages).
+
+## Languages
+
+The default model, **Phonon-2, is English-only.** For any other language, pick **Parakeet Ultra**
+(or Parakeet TDT v3) in **Settings → General → Speech model**. Both detect the language
+automatically, so you can switch languages between dictations without changing anything.
+
+| Language | Code | Model to pick | Typical accuracy* |
+|---|---|---|---|
+| English | en | Phonon-2 (default) or any model | ~5% WER |
+| Bulgarian | bg | Parakeet Ultra / TDT v3 | ~13% WER |
+| Croatian | hr | Parakeet Ultra / TDT v3 | ~12% WER |
+| Czech | cs | Parakeet Ultra / TDT v3 | ~11% WER |
+| Danish | da | Parakeet Ultra / TDT v3 | ~18% WER |
+| Dutch | nl | Parakeet Ultra / TDT v3 | ~7% WER |
+| Estonian | et | Parakeet Ultra / TDT v3 | ~18% WER |
+| Finnish | fi | Parakeet Ultra / TDT v3 | ~13% WER |
+| French | fr | Parakeet Ultra / TDT v3 | ~5% WER |
+| German | de | Parakeet Ultra / TDT v3 | ~5% WER |
+| Greek | el | Parakeet Ultra / TDT v3 | ~21% WER |
+| Hungarian | hu | Parakeet Ultra / TDT v3 | ~16% WER |
+| Italian | it | Parakeet Ultra / TDT v3 | ~3% WER |
+| Latvian | lv | Parakeet Ultra / TDT v3 | ~23% WER |
+| Lithuanian | lt | Parakeet Ultra / TDT v3 | ~20% WER |
+| Maltese | mt | Parakeet Ultra / TDT v3 | ~20% WER |
+| Polish | pl | Parakeet Ultra / TDT v3 | ~7% WER |
+| Portuguese | pt | Parakeet Ultra / TDT v3 | ~5% WER |
+| Romanian | ro | Parakeet Ultra / TDT v3 | ~12% WER |
+| Russian | ru | Parakeet Ultra / TDT v3 | ~6% WER |
+| Slovak | sk | Parakeet Ultra / TDT v3 | ~9% WER |
+| Slovenian | sl | Parakeet Ultra / TDT v3 | ~24% WER |
+| Spanish | es | Parakeet Ultra / TDT v3 | ~3% WER |
+| Swedish | sv | Parakeet Ultra / TDT v3 | ~15% WER |
+| Ukrainian | uk | Parakeet Ultra / TDT v3 | ~7% WER |
+
+\* Word error rate of Parakeet TDT v3 on the FLEURS benchmark, from
+[NVIDIA's model card](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3) (lower is better; Ultra is
+slightly more accurate overall). Treat these as a guide: lower-accuracy languages work, but expect
+more corrections.
+
+The models in **Settings → General → Speech model**:
+
+| Model | Languages | Download | Best for |
+|---|---|---|---|
+| Phonon-2 · Balanced (default) | English | ~330 MB | English dictation: small, fast, very accurate |
+| Parakeet Ultra · Max | 25 above | ~620 MB | Multilingual, and the most accurate overall |
+| Parakeet TDT v3 · Classic | 25 above | ~480 MB | Multilingual, smaller than Ultra |
+| Parakeet TDT v2 · Classic | English | ~480 MB | English, strong recall |
+| Parakeet 110M · Light | English | ~230 MB | Lightest and fastest; slightly less accurate |
+
+All models run on the Neural Engine at similar speed (a typical sentence takes 35–65 ms) and are
+downloaded once when selected.
+
+Not supported yet: Japanese, Chinese, Korean, Arabic, Hindi and other languages outside the list
+above. Their speech is transcribed as English-sounding gibberish. (FluidAudio has models for these,
+such as SenseVoice, but Mumble doesn't integrate them yet.)
+
+Some text features are English-only: filler-word removal (*um*, *uh*), spoken commands
+("new line", "new paragraph") and custom-vocabulary boosting. In other languages they simply have
+no effect. Writing numbers as digits (experimental, off by default) supports English, German,
+Spanish, French, Hindi, Japanese and Chinese.
 
 ## Releasing
 
