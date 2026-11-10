@@ -10,7 +10,6 @@ struct SettingsView: View {
 
     enum Tab: String, CaseIterable, Identifiable {
         case general = "General"
-        case meetings = "Meetings"
         case vocabulary = "Vocabulary"
         case replacements = "Replacements"
         case history = "History"
@@ -19,7 +18,6 @@ struct SettingsView: View {
         var icon: String {
             switch self {
             case .general: "gearshape"
-            case .meetings: "person.2.wave.2"
             case .vocabulary: "character.book.closed"
             case .replacements: "arrow.triangle.swap"
             case .history: "clock"
@@ -36,7 +34,6 @@ struct SettingsView: View {
         } detail: {
             switch navigation.tab {
             case .general: GeneralPane(controller: controller, meetings: meetings)
-            case .meetings: MeetingsPane(meetings: meetings)
             case .vocabulary: VocabularyPane(controller: controller)
             case .replacements: ReplacementsPane(controller: controller)
             case .history: HistoryPane(controller: controller)

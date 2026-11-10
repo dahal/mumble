@@ -26,6 +26,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         AppNavigation.shared.openWindow = { Self.showSettings() }
+        AppNavigation.shared.openMeetings = { Self.showMeetings() }
         if DevTools.runIfRequested(Self.controller) { return }
         Self.controller.start()
         Self.meetings.start()
@@ -33,8 +34,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let onboarded = UserDefaults.standard.bool(forKey: "onboarded")
         if !onboarded || !Permissions.isAccessibilityTrusted || AudioRecorder.permission != .authorized {
             Self.showSettings()
+        } else if HomeWindow.showsAtLaunch, !HomeWindow.launchedAtLogin {
+            HomeWindow.show()
         }
         UserDefaults.standard.set(true, forKey: "onboarded")
+    }
+
+    static func showMeetings() {
+        let meetings = meetingsOverride ?? meetings
+        WindowCenter.shared.show("meetings", title: "Meetings", size: NSSize(width: 1100, height: 720),
+                                 minSize: NSSize(width: 760, height: 460), autosave: "MumbleMeetings") {
+            MeetingsWindow(meetings: meetings)
+        }
+    }
+
+    static func showBooks() { BooksController.shared.showLibrary() }
+
+    /// PDFs opened from Finder ("Open With", or dropped on the Dock icon) go to the book library.
+    func application(_ application: NSApplication, open urls: [URL]) {
+        let pdfs = urls.filter { $0.pathExtension.lowercased() == "pdf" }
+        guard !pdfs.isEmpty else { return }
+        BooksController.shared.importFiles(pdfs, openSingle: true)
+        if pdfs.count > 1 { Self.showBooks() }
+    }
+
+    /// Opening Mumble again (Finder, Spotlight, the Dock) with no windows open shows Home.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        if !flag { HomeWindow.show() }
+        return true
     }
 
     static func showSettings() {
@@ -78,7 +105,11 @@ struct MenuContent: View {
             Button("Start Meeting Notes (Experimental)") { meetings.toggle() }
                 .disabled(meetings.store == nil)
         }
+        Button("Home…") { HomeWindow.show() }
         Button("Meetings…") { AppNavigation.shared.showMeeting(nil) }
+            .keyboardShortcut("m", modifiers: [.command, .shift])
+        Button("Books…") { AppDelegate.showBooks() }
+            .keyboardShortcut("b", modifiers: [.command, .shift])
         Divider()
         if let last = controller.history.first {
             Button("Copy last: \(last.text.prefix(40))\(last.text.count > 40 ? "…" : "")") {

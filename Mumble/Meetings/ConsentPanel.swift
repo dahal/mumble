@@ -70,17 +70,17 @@ struct ConsentView: View {
     }
 }
 
-/// Which sidebar tab and meeting the Mumble window shows; lets notifications deep-link.
+/// Which settings tab and meeting are showing; lets notifications deep-link.
 @MainActor @Observable
 final class AppNavigation {
     static let shared = AppNavigation()
     var tab: SettingsView.Tab = .general
     var selectedMeetingID: UUID?
     var openWindow: () -> Void = {}
+    var openMeetings: () -> Void = {}
 
     func showMeeting(_ id: UUID?) {
-        tab = .meetings
-        selectedMeetingID = id
-        openWindow()
+        if let id { selectedMeetingID = id }
+        openMeetings()
     }
 }

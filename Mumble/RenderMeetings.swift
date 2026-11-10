@@ -25,6 +25,8 @@ enum RenderMeetings {
             try await dump(to: dir.appending(path: "meetings-list.txt"))
             nav.showMeeting(id)
             try await dump(to: dir.appending(path: "meeting-detail.txt"))
+            try await BooksDevTools.snapshot("meetings", to: dir.appending(path: "meetings.png"))
+            WindowCenter.shared.close("meetings")
             nav.selectedMeetingID = nil
             nav.tab = .general
             try await dump(to: dir.appending(path: "settings-general.txt"))

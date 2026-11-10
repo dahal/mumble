@@ -87,8 +87,27 @@ never transcript text. Crash reports, if any, are in `~/Library/Logs/DiagnosticR
   copy instead of a paste; history is kept locally and can be turned off.
 - **Model choice**: Phonon-2 (default), Parakeet Ultra (multilingual, most accurate), TDT v3/v2,
   and a light 110M model. See [Languages](#languages).
-- **Meeting notes** (experimental): who said what, by name, plus a summary and action items. See
-  [Meeting notes](#meeting-notes-experimental).
+- **Meeting notes** (experimental): who said what, by name, plus a summary and action items, in a
+  Notes-style window (menu bar → *Meetings…*, ⌘⇧M). See [Meeting notes](#meeting-notes-experimental).
+- **Books** (read aloud): a PDF library that reads your books to you in a natural voice. See
+  [Books](#books-read-aloud).
+
+## Books (read aloud)
+
+Drag PDFs into the Books window (menu bar → *Books…*, ⌘⇧B), choose *Open With → Mumble* in
+Finder, or drop them on the Dock icon. Open a book and press **Space** to listen.
+
+- **Voice**: [Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M) via FluidAudio, on the Neural
+  Engine. It downloads once (~390 MB, to `~/.cache/fluidaudio`) the first time you press Play;
+  after that, narration starts in about a second and runs well ahead of real time. 11 American and
+  British voices, 0.75×–1.75× speed.
+- **Follows along**: the sentence being read is highlighted and kept on screen. Double-click a
+  sentence (or right-click → *Read from Here*) to jump. ⌘← / ⌘→ skip a sentence.
+- **Reads the book, not the page furniture**: running headers, footers and page numbers are skipped,
+  hyphenated line breaks are rejoined, and sentences continue across pages.
+- **Remembers your place** in every book. The library keeps its own copy of each PDF in
+  `~/Library/Application Support/Mumble/Books`.
+- Scanned PDFs (pages that are only images) have no text to read; OCR isn't supported yet.
 
 ## Meeting notes (experimental)
 
