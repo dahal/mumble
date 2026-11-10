@@ -12,6 +12,7 @@ enum DevTools {
     /// Returns true if a developer mode took over this launch.
     static func runIfRequested(_ controller: DictationController) -> Bool {
         let args = CommandLine.arguments
+        if BooksDevTools.runIfRequested() { return true }
         if let i = args.firstIndex(of: "--self-test"), i + 1 < args.count {
             Task { await selfTest(controller, path: args[i + 1]) }
             return true

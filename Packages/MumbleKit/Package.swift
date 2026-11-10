@@ -9,15 +9,17 @@ let package = Package(
         .library(name: "MumbleASR", targets: ["MumbleASR"]),
         .library(name: "MumbleStore", targets: ["MumbleStore"]),
         .library(name: "MumbleSummary", targets: ["MumbleSummary"]),
+        .library(name: "MumbleReader", targets: ["MumbleReader"]),
+        .library(name: "MumbleTTS", targets: ["MumbleTTS"]),
         .executable(name: "mumble-eval", targets: ["MumbleEval"]),
     ],
     dependencies: [
         // Pinned exactly: FluidAudio moves fast and its API changes between minors.
-        // Traits: keep inverse text normalization and diarization (meeting notes), drop TTS to stay small.
+        // Traits: inverse text normalization, diarization (meeting notes) and TTS (book reader).
         .package(
             url: "https://github.com/FluidInference/FluidAudio.git",
             exact: "0.18.0",
-            traits: ["NemoTextProcessing", "Diarizer"]
+            traits: ["NemoTextProcessing", "Diarizer", "TTS"]
         ),
         // SQLite for meeting notes: full-text search, migrations, observation.
         .package(url: "https://github.com/groue/GRDB.swift.git", exact: "7.10.0"),
@@ -37,6 +39,12 @@ let package = Package(
             dependencies: ["MumbleCore", .product(name: "GRDB", package: "GRDB.swift")]
         ),
         .target(name: "MumbleSummary", dependencies: ["MumbleCore"]),
+        // Book reader: PDF text → spoken sentences, and the library. Pure logic, fast tests.
+        .target(name: "MumbleReader"),
+        .target(
+            name: "MumbleTTS",
+            dependencies: [.product(name: "FluidAudio", package: "FluidAudio")]
+        ),
         .executableTarget(
             name: "MumbleEval",
             dependencies: ["MumbleCore", "MumbleASR"]
@@ -44,6 +52,8 @@ let package = Package(
         .testTarget(name: "MumbleCoreTests", dependencies: ["MumbleCore"]),
         .testTarget(name: "MumbleStoreTests", dependencies: ["MumbleStore", "MumbleCore"]),
         .testTarget(name: "MumbleSummaryTests", dependencies: ["MumbleSummary", "MumbleCore"]),
+        .testTarget(name: "MumbleReaderTests", dependencies: ["MumbleReader"]),
+        .testTarget(name: "MumbleTTSTests", dependencies: ["MumbleTTS"]),
         .testTarget(name: "MumbleASRTests", dependencies: ["MumbleASR", "MumbleCore"]),
     ]
 )

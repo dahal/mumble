@@ -31,6 +31,10 @@ targets:
         product: MumbleStore
       - package: MumbleKit
         product: MumbleSummary
+      - package: MumbleKit
+        product: MumbleReader
+      - package: MumbleKit
+        product: MumbleTTS
     info:
       path: Mumble/Info.plist
       properties:
@@ -44,6 +48,12 @@ targets:
         NSCalendarsFullAccessUsageDescription: Mumble reads your calendar to title meetings, suggest attendee names and remind you before calls. Nothing leaves this Mac.
         NSCalendarsUsageDescription: Mumble reads your calendar to title meetings, suggest attendee names and remind you before calls. Nothing leaves this Mac.
         NSScreenCaptureUsageDescription: Mumble can read the meeting window to identify who is speaking. Frames are never saved.
+        # Books: open PDFs from Finder ("Open With" / drop on the Dock icon).
+        CFBundleDocumentTypes:
+          - CFBundleTypeName: PDF Document
+            CFBundleTypeRole: Viewer
+            LSHandlerRank: Alternate
+            LSItemContentTypes: [com.adobe.pdf]
         NSHumanReadableCopyright: "© 2026 Puru Dahal. Licensed under AGPL-3.0."
     settings:
       base:
