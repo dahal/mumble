@@ -6,7 +6,7 @@ import MumbleCore
 /// Developer entry points, triggered by launch arguments:
 ///
 ///   Mumble.app/Contents/MacOS/Mumble --self-test <audio-file>   transcribe through the real pipeline, print, quit
-///   Mumble.app/Contents/MacOS/Mumble --demo-island              cycle the notch island through its states
+///   Mumble.app/Contents/MacOS/Mumble --demo-island              cycle the island through its states
 @MainActor
 enum DevTools {
     /// Returns true if a developer mode took over this launch.
@@ -76,25 +76,23 @@ enum DevTools {
                 try? rep.representation(using: .png, properties: [:])?.write(to: dir.appending(path: "\(name)-\(bg).png"))
             }
         }
-        for hasNotch in [true, false] {
-            for (name, phase, preview, latched) in states {
-                let model = IslandModel()
-                model.phase = phase
-                model.previewText = preview
-                model.isLatched = latched
-                model.elapsed = 4.2
-                model.levels = (0..<14).map { Float(0.25 + 0.6 * abs(sin(Double($0) * 0.7))) }
-                model.meetingSpeaker = "Sarah Chen"
-                if phase == .meeting { model.elapsed = 768 }
-                let view = IslandView(model: model, notch: CGSize(width: 185, height: 32), hasNotch: hasNotch)
-                    .frame(width: 520, height: 180)
-                    .background(Color(white: 0.85))
-                let renderer = ImageRenderer(content: view)
-                renderer.scale = 2
-                if let image = renderer.nsImage, let tiff = image.tiffRepresentation,
-                   let png = NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:]) {
-                    try? png.write(to: dir.appending(path: "\(hasNotch ? "notch" : "floating")-\(name).png"))
-                }
+        for (name, phase, preview, latched) in states {
+            let model = IslandModel()
+            model.phase = phase
+            model.previewText = preview
+            model.isLatched = latched
+            model.elapsed = 4.2
+            model.levels = (0..<14).map { Float(0.25 + 0.6 * abs(sin(Double($0) * 0.7))) }
+            model.meetingSpeaker = "Sarah Chen"
+            if phase == .meeting { model.elapsed = 768 }
+            let view = IslandView(model: model)
+                .frame(width: 520, height: 180)
+                .background(Color(white: 0.85))
+            let renderer = ImageRenderer(content: view)
+            renderer.scale = 2
+            if let image = renderer.nsImage, let tiff = image.tiffRepresentation,
+               let png = NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:]) {
+                try? png.write(to: dir.appending(path: "island-\(name).png"))
             }
         }
     }

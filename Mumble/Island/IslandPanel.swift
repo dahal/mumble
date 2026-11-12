@@ -1,7 +1,8 @@
 import AppKit
 import SwiftUI
 
-/// A borderless, click-through panel pinned to the top of the active screen. It never
+/// A borderless, click-through panel pinned to the bottom middle of the active screen,
+/// just above the Dock. It never
 /// becomes key, so the app you're dictating into keeps focus.
 @MainActor
 final class IslandPanel {
@@ -9,6 +10,7 @@ final class IslandPanel {
     private var panel: NSPanel?
     private var hideTask: Task<Void, Never>?
     private static let panelSize = CGSize(width: 520, height: 180)
+    private static let bottomMargin: CGFloat = 0
 
     init(model: IslandModel) {
         self.model = model
@@ -20,15 +22,14 @@ final class IslandPanel {
         let panel = panel ?? makePanel()
         self.panel = panel
 
-        let notch = Self.notchSize(of: screen)
-        panel.contentView = NSHostingView(
-            rootView: IslandView(model: model, notch: notch ?? CGSize(width: 180, height: 32), hasNotch: notch != nil))
+        panel.contentView = NSHostingView(rootView: IslandView(model: model))
         panel.ignoresMouseEvents = !model.phase.isInteractive
-        let frame = screen.frame
+        // visibleFrame excludes the Dock, so the pill never sits on top of it.
+        let frame = screen.visibleFrame
         panel.setFrame(
             NSRect(
                 x: frame.midX - Self.panelSize.width / 2,
-                y: frame.maxY - Self.panelSize.height - (notch == nil ? Self.menuBarHeight(screen) : 0),
+                y: frame.minY + Self.bottomMargin,
                 width: Self.panelSize.width,
                 height: Self.panelSize.height),
             display: true)
@@ -75,16 +76,5 @@ final class IslandPanel {
     static func activeScreen() -> NSScreen {
         let mouse = NSEvent.mouseLocation
         return NSScreen.screens.first { NSMouseInRect(mouse, $0.frame, false) } ?? NSScreen.main ?? NSScreen.screens[0]
-    }
-
-    static func notchSize(of screen: NSScreen) -> CGSize? {
-        guard screen.safeAreaInsets.top > 0,
-              let left = screen.auxiliaryTopLeftArea, let right = screen.auxiliaryTopRightArea
-        else { return nil }
-        return CGSize(width: screen.frame.width - left.width - right.width, height: screen.safeAreaInsets.top)
-    }
-
-    static func menuBarHeight(_ screen: NSScreen) -> CGFloat {
-        max(0, screen.frame.maxY - screen.visibleFrame.maxY)
     }
 }
