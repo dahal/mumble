@@ -75,8 +75,8 @@ never transcript text. Crash reports, if any, are in `~/Library/Logs/DiagnosticR
 
 ## Features
 
-- **Notch island**: a Dynamic Island–style pill grows out of the notch, showing the input level, a
-  timer and the live transcript. On displays without a notch it floats below the menu bar.
+- **Island**: a Dynamic Island–style pill at the bottom middle of the screen, just above the Dock and
+  close to where you're typing, showing the input level, a timer and the live transcript.
 - **Two-pass recognition**: a live preview every ~450 ms, then one final pass on release
   (~30–50 ms for a typical sentence on an M2 Max).
 - **Custom vocabulary** with aliases: CTC keyword boosting, plus safeguards that reject any swap

@@ -1,12 +1,9 @@
 import AppKit
 import SwiftUI
 
-/// The black pill that grows out of the notch. On screens without a notch it floats
-/// just below the menu bar with fully rounded corners.
+/// The black pill that floats at the bottom middle of the screen and grows upward.
 struct IslandView: View {
     let model: IslandModel
-    let notch: CGSize
-    let hasNotch: Bool
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -28,36 +25,27 @@ struct IslandView: View {
     }
 
     private var size: CGSize {
-        guard expanded else { return hasNotch ? notch : CGSize(width: 120, height: 0) }
-        let topInset = hasNotch ? notch.height : 0
-        if isPrompt { return CGSize(width: 480, height: topInset + 44) }
-        let width: CGFloat = showsText ? 440 : max(notch.width + 120, 260)
-        return CGSize(width: width, height: topInset + (showsText ? 84 : 40))
+        guard expanded else { return CGSize(width: 120, height: 0) }
+        if isPrompt { return CGSize(width: 480, height: 44) }
+        return CGSize(width: showsText ? 440 : 300, height: showsText ? 84 : 40)
     }
 
     var body: some View {
         VStack(spacing: 0) {
+            Spacer(minLength: 0)
             ZStack(alignment: .top) {
-                Group {
-                    if hasNotch {
-                        IslandShape(topRadius: 8, bottomRadius: 22).fill(.black)
-                    } else {
-                        RoundedRectangle(cornerRadius: 20, style: .continuous).fill(.black)
-                    }
-                }
-                .shadow(color: .black.opacity(expanded ? 0.35 : 0), radius: 12, y: 4)
+                RoundedRectangle(cornerRadius: 20, style: .continuous).fill(.black)
+                    .shadow(color: .black.opacity(expanded ? 0.35 : 0), radius: 12, y: 4)
                 if expanded {
                     content
-                        .padding(.top, hasNotch ? notch.height : 0)
                         .padding(.horizontal, 18)
-                        .transition(.opacity.combined(with: .scale(scale: 0.9, anchor: .top)))
+                        .transition(.opacity.combined(with: .scale(scale: 0.9, anchor: .bottom)))
                 }
             }
             .frame(width: size.width, height: size.height)
-            .padding(.top, hasNotch ? 0 : 6)
-            Spacer(minLength: 0)
+            .padding(.bottom, 16) // room for the shadow inside the panel
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
         .animation(reduceMotion ? .easeOut(duration: 0.15) : .spring(response: 0.38, dampingFraction: 0.78), value: size)
         .animation(.easeOut(duration: 0.15), value: model.phase)
         .preferredColorScheme(.dark)
@@ -251,28 +239,5 @@ struct WaveformBars: View {
         }
         .frame(height: 24)
         .animation(.easeOut(duration: 0.08), value: levels)
-    }
-}
-
-/// Square-ish top corners that blend into the notch, generously rounded bottom corners.
-struct IslandShape: Shape {
-    var topRadius: CGFloat
-    var bottomRadius: CGFloat
-
-    func path(in rect: CGRect) -> Path {
-        let t = min(topRadius, rect.height / 2, rect.width / 2)
-        let b = min(bottomRadius, rect.height / 2, rect.width / 2)
-        var p = Path()
-        p.move(to: CGPoint(x: rect.minX, y: rect.minY))
-        p.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
-        p.addQuadCurve(to: CGPoint(x: rect.maxX - t, y: rect.minY + t), control: CGPoint(x: rect.maxX - t, y: rect.minY))
-        p.addLine(to: CGPoint(x: rect.maxX - t, y: rect.maxY - b))
-        p.addQuadCurve(to: CGPoint(x: rect.maxX - t - b, y: rect.maxY), control: CGPoint(x: rect.maxX - t, y: rect.maxY))
-        p.addLine(to: CGPoint(x: rect.minX + t + b, y: rect.maxY))
-        p.addQuadCurve(to: CGPoint(x: rect.minX + t, y: rect.maxY - b), control: CGPoint(x: rect.minX + t, y: rect.maxY))
-        p.addLine(to: CGPoint(x: rect.minX + t, y: rect.minY + t))
-        p.addQuadCurve(to: CGPoint(x: rect.minX, y: rect.minY), control: CGPoint(x: rect.minX + t, y: rect.minY))
-        p.closeSubpath()
-        return p
     }
 }
